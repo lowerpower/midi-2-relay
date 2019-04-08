@@ -13,8 +13,7 @@ main()
 
 
 
-//ser = serial.Serial('/dev/ttyAMA0', baudrate=38400)
-//int sfd = open("/dev/serial0", O_RDWR | O_NOCTTY ); 
+// Open the hardware UART, this is pre setup for midi in config
 int sfd = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY ); 
 if (sfd == -1){
     printf ("Error no is : %d\n", errno);
@@ -28,6 +27,7 @@ printf("sfd=%d\n",sfd);
 //cfsetispeed(&options,speed);  //for input speed
 
 
+// set for 38400 for midi
 //raw mode. no echo, with 8n1 at 38400 baud 
 tcgetattr(sfd, &options);
 cfsetspeed(&options,B38400);
