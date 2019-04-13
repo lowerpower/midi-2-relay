@@ -84,7 +84,6 @@
     <ClCompile Include="..\src\file_config.c" />
     <ClCompile Include="..\src\midi.c" />
     <ClCompile Include="..\src\wingetopt.c" />
-    <ClCompile Include="..\src\yevent.c" />
     <ClCompile Include="..\src\yselect.c" />
   </ItemGroup>
   <ItemGroup>
@@ -95,11 +94,7 @@
     <ClInclude Include="..\src\file_config.h" />
     <ClInclude Include="..\src\midi.h" />
     <ClInclude Include="..\src\wingetopt.h" />
-    <ClInclude Include="..\src\yevent.h" />
     <ClInclude Include="..\src\yselect.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\sample_files\install.sh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
