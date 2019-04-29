@@ -29,33 +29,34 @@ extern U8              global_flag;
 typedef struct midi_config_
 {
     // Target Relay Driver
-    U16			des_port;
-    IPADDR		dest_IP;
+    char        target_host[MAX_PATH+1];
+    U16         target_port;
     SOCKET		soc;
     //
-    int			verbose;
-    int			log_level;
-    int			auto_reload;
-    //
+    int         verbose;
+    int         log_level;
+    int         auto_reload;
 
-    // current relay mask
-    char        bitmask[8];
+    // serial descripter file
+    int         sfd;        
+
+    // current relay mask (support 128 relays)
+    char        bitmask[16];
 
     // relay map
-    int         map[128][16];
+    char        map[128][16];
 
+    char        config_file[MAX_PATH];
+    char        map_file[MAX_PATH];
+    struct stat map_file_info;
 
-    char		config_file[MAX_PATH];
-    char		map_file[MAX_PATH];
     char        run_as_user[MAX_PATH];
     char        chroot[MAX_PATH];
 
-
     // Stats
 
-
     // Pidfile for daemon
-    char		pidfile[MAX_PATH];
+    char        pidfile[MAX_PATH];
 }MIDI;
 
 #endif

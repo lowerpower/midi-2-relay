@@ -82,6 +82,7 @@
     <ClCompile Include="..\src\arch.c" />
     <ClCompile Include="..\src\daemonize.c" />
     <ClCompile Include="..\src\file_config.c" />
+    <ClCompile Include="..\src\load_map.c" />
     <ClCompile Include="..\src\midi.c" />
     <ClCompile Include="..\src\wingetopt.c" />
     <ClCompile Include="..\src\yselect.c" />
@@ -92,6 +93,7 @@
     <ClInclude Include="..\src\daemonize.h" />
     <ClInclude Include="..\src\debug.h" />
     <ClInclude Include="..\src\file_config.h" />
+    <ClInclude Include="..\src\load_map.h" />
     <ClInclude Include="..\src\midi.h" />
     <ClInclude Include="..\src\wingetopt.h" />
     <ClInclude Include="..\src\yselect.h" />
