@@ -1,0 +1,10 @@
+#map file, mape a note and a channel to a relay, multiple items can be mapped to the same relay,
+#note channel relay
+0 0 1
+0 0 2
+0 0 3
+0 0 4
+0 0 5
+0 0 6
+0 0 7
+0 0 8
