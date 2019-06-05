@@ -43,7 +43,7 @@
 #define _MT 
 #endif 
 //#ifndef  WIN32_LEAN_AND_MEAN 
-#include <winsock.h>
+#include <winsock2.h>
 #include <windows.h>
 
 #include <process.h>    /* _beginthread, _endthread */
@@ -56,7 +56,7 @@
 #include <signal.h>
 #include <sys/timeb.h>
 #include <sys/stat.h>
-#include <Rpc.h>
+//#include <Rpc.h>
 #include <string.h>
 #include <assert.h>
 #include <process.h>
@@ -80,14 +80,16 @@
 //#define FD_SETSIZE 512
 
 // Unix some winsock errors
+/*
 #define EWOULDBLOCK		WSAEWOULDBLOCK
 #define EINPROGRESS		WSAEINPROGRESS
 #define EALREADY		WSAEALREADY
 #define EINVAL			WSAEINVAL
 #define EISCONN			WSAEISCONN
 #define ENOTCONN		WSAENOTCONN
-
+*/
 #define usleep			Sleep
+#define	close			_close
 
 #if defined(ZAVIO)
 #define openlog(...) //	

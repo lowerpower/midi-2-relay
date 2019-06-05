@@ -20,11 +20,12 @@
 */
 
 
-//#include "config.h"
+#include "config.h"
 #include "mytypes.h"
 #include "midi.h"
 #include "arch.h"
 #include "debug.h"
+#include "load_map.h"
 
 #define MAX_LINE_SIZE	1024
 
@@ -43,7 +44,7 @@ load_map_if_new(MIDI *midi)
         {
             // File has changed, reload
             if (midi->verbose > 1) ytprintf("Reload Map File\n");
-            return(load_map(midi)));
+            return(load_map(midi));
         }
     }
     else
@@ -120,7 +121,7 @@ load_map(MIDI *midi)
                 continue;
             // get actual channel 
             channel=atoi(subst);
-            if((channel<0) || (channel>16))
+            if((channel<0) || (channel>15))
                 continue;
 
             // get relay 

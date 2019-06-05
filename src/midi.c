@@ -9,8 +9,14 @@
 #include "mytypes.h"
 #include "config.h"
 #include "debug.h"
+#include "arch.h"
 #include "midi.h"
+#include "load_map.h"
+#if defined(WIN32)
+#include "wingetopt.h"
+#else
 #include <termios.h> 
+#endif
 
 volatile int             go = 0;
 MIDI                    *global_midi;
@@ -24,6 +30,7 @@ U8				        global_flag = 0;
 //
 // Unix handler if you need to handle CTRL-C or other signals
 //
+#if !defined(WIN32)
 void
 termination_handler(int signum)
 {
@@ -58,13 +65,43 @@ termination_handler(int signum)
     }
 }
 
+#else
+
+BOOL WINAPI ConsoleHandler(DWORD CEvent)
+{
+    switch (CEvent)
+    {
+    case CTRL_C_EVENT:
+        yprintf("CTRL+C received!\n");
+        break;
+    case CTRL_BREAK_EVENT:
+        yprintf("CTRL+BREAK received!\n");
+        break;
+    case CTRL_CLOSE_EVENT:
+        yprintf("program is being closed received!\n");
+        break;
+    case CTRL_SHUTDOWN_EVENT:
+        yprintf("machine is being shutdown!\n");
+        break;
+    case CTRL_LOGOFF_EVENT:
+        return FALSE;
+    }
+    go = 0;
+
+    return TRUE;
+}
+
+#endif
+
+
 init_serial(MIDI *midi)
 {
+#if !defined(WIN32)
     //
     // Open Serial Port (note that this config is for raspberry pi 3 with serial port configured for midi)
     //
     midi->sfd = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY);
-    if (sfd == -1) {
+    if (midi->sfd == -1) {
         printf("Error no is : %d\n", errno);
         printf("Error description is : %s\n", strerror(errno));
         return(-1);
@@ -78,6 +115,7 @@ init_serial(MIDI *midi)
     options.c_cflag |= CREAD;
     cfmakeraw(&options);
     tcsetattr(midi->sfd, TCSANOW, &options);
+#endif
     
     return(0);
 }
@@ -115,21 +153,19 @@ void usage(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-    int				c, i;
+    int				c;
     int             file_ret = 0;
     U32				timestamp = second_count();
     MIDI            midi_static;
     MIDI            *midi=&midi_static;
-    char            buf2[10];
     int             count = 0;
+#if !defined(WIN32)
     struct termios  options;
-
+#endif
 
 
     // Set defaults
     memset(midi,0,sizeof(MIDI));
-
-
 
     //
     // Banner
@@ -141,6 +177,15 @@ int main(int argc, char **argv)
     // Initialize error handling and signals
     //------------------------------------------------------------------
     //	SetConsoleCtrlHandle(termination_handler,TRUE);
+#if defined(WIN32) 
+    if (SetConsoleCtrlHandler((PHANDLER_ROUTINE)ConsoleHandler, TRUE) == FALSE)
+    {
+        // unable to install handler... 
+        // display message to the user
+        yprintf("Error - Unable to install control handler!\n");
+        exit(0);
+    }
+#else
 
     if (signal(SIGINT, termination_handler) == SIG_IGN)
         signal(SIGINT, SIG_IGN);
@@ -157,6 +202,7 @@ int main(int argc, char **argv)
         signal(SIGXCPU, SIG_IGN);
     if (signal(SIGXFSZ, termination_handler) == SIG_IGN)
         signal(SIGXFSZ, SIG_IGN);
+#endif
 #endif
     //
     // Load config file first
@@ -198,23 +244,22 @@ int main(int argc, char **argv)
             break;
         case 'l':
             //log level
-            midi.log_level = atoi(optarg);
+            midi->log_level = atoi(optarg);
             break;
         case 't':
             //target Port
-            midi.target_port = atoi(optarg);
-            midi.target_host = atoi(optarg);
+           //midi->target_port = atoi(optarg);
+           // midi->target_host = atoi(optarg);
             break;
         case 'd':
             // Startup as daemon with pid file
             printf("Starting up as daemon\n");
-            strncpy(midi.pidfile, optarg, MAX_PATH - 1);
+            strncpy(midi->pidfile, optarg, MAX_PATH - 1);
             global_flag = global_flag | GF_DAEMON;
             break;
         case 'v':
             midi->verbose++;
-            break;]\
-
+            break;
         case 'f':
             // Do nothing, did it above
             break;
@@ -270,9 +315,11 @@ int main(int argc, char **argv)
     while (go)
     {
         // Read a byte from the serial port
+#if !defined(WIN32)
         count = read(midi->sfd, buf2, 1);
         buf2[1] = 0;
         printf("count= %d  --> %x\n", count, buf2[0]);
+#endif
 
         // check background every so often
     }
