@@ -59,5 +59,13 @@
     <Filter Include="include">
       <UniqueIdentifier>{c1fe0c26-aec6-4d47-83b1-ec820faca88d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="resource_files">
+      <UniqueIdentifier>{f86aa2df-3be1-4091-9a0d-4fb23e3750bb}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="map.txt">
+      <Filter>resource_files</Filter>
+    </Text>
   </ItemGroup>
 </Project>

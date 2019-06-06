@@ -98,6 +98,9 @@
     <ClInclude Include="..\src\wingetopt.h" />
     <ClInclude Include="..\src\yselect.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="map.txt" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

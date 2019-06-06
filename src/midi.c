@@ -166,6 +166,7 @@ int main(int argc, char **argv)
 
     // Set defaults
     memset(midi,0,sizeof(MIDI));
+    strcpy(midi->map_file, "map.txt");
 
     //
     // Banner
@@ -322,6 +323,7 @@ int main(int argc, char **argv)
 #endif
 
         // check background every so often
+        //load_map_if_new(midi);
     }
 	
 
