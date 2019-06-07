@@ -53,6 +53,13 @@ typedef struct midi_config_
     char        run_as_user[MAX_PATH];
     char        chroot[MAX_PATH];
 
+    // Current midi state
+    int         counter;
+    char        status;
+    char        type;
+    char        data1;
+    char        data2;
+
     // Stats
 
     // Pidfile for daemon

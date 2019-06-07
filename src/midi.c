@@ -120,7 +120,111 @@ init_serial(MIDI *midi)
     return(0);
 }
 
+//
+// Return 1 if we can process tyis type
+//
+int
+support_midi_byte_type(char type)
+{
+    int ret = 0;
 
+    // Just look at high nibble for type
+    switch (type & 0xf0)
+    {
+    case 0x80:  /*note off */
+        ret = 1;
+        break;
+    case 0x90:  /*note on */
+        ret = 1;
+        break;
+    case 0xa0:  /*Polyphonic Pressure */
+        break;
+    case 0xb0:  /* Control Change */
+        break;
+    case 0xc0:  /* Program Change */
+        break;
+    case 0xd0:  /* Channel Pressure */
+        break;
+    case 0xe0:  /* Pitch Bend */
+        break;
+    case 0xf0:  /* System */
+        ret = 1;
+        break;
+    defaut:
+        break;
+    }
+    return(ret);
+}
+
+
+void
+process_midi_command(MIDI *midi)
+{
+    // process the midi command 
+    swich (midi->status & 0xf0)
+    {
+    case 0x80:  /*note off */
+        process_midi_note_off(midi);
+        ret = 1;
+        break;
+    case 0x90:  /*note on */
+        process_midi_note_on(midi);
+        break;
+    case 0xf0:  /* System */
+        process_midi_system(midi);
+        break;
+    }
+
+}
+
+//
+//
+//
+void
+process_midi_byte(MIDI *midi, char byte)
+{
+    char type = 0;
+
+    // is status byte?
+    if (0x80 & byte)
+    {
+        // get type
+        //
+        // Midi Format
+        //    | status  | data1    | data2     |
+        //    |1tttnnnn | 0xxxxxxx | 0xxxxxxxx |
+        //    t = type
+        //    n = channel / subclass
+        //
+        // type = (byte & 0x7) >> 4;
+        //
+        midi->status = byte;
+        midi->counter = 0;
+        // 
+        // do we support this type?
+        //
+        if (support_midi_byte_type(midi->type))
+        {
+            // we process this type, set counter to 1
+            midi->counter = 1;
+        }
+        // done processing status byte
+        return;
+    }
+    else
+    {
+        if (1 == midi->counter)
+        {
+            midi->data1 = byte;
+            midi->counter = 2;
+        }
+        else
+        {
+            process_midi_command(midi);
+            midi->counter = 1;
+        }
+    }
+}
 //
 // Banner for Software
 //
@@ -160,6 +264,7 @@ int main(int argc, char **argv)
     MIDI            *midi=&midi_static;
     int             count = 0;
 #if !defined(WIN32)
+    char            buf2[8];
     struct termios  options;
 #endif
 
@@ -317,9 +422,13 @@ int main(int argc, char **argv)
     {
         // Read a byte from the serial port
 #if !defined(WIN32)
+        // read a byte from serial midi interface        
         count = read(midi->sfd, buf2, 1);
+        process_midi_byte(midi, buf2[0]);
         buf2[1] = 0;
         printf("count= %d  --> %x\n", count, buf2[0]);
+
+
 #endif
 
         // check background every so often
