@@ -24,6 +24,8 @@
 
 extern U8              global_flag;
 
+#define BITMASK_SIZE       32               // support 256 relays
+
 
 // Custom File config for each product here, this one is for server channel config
 typedef struct midi_config_
@@ -40,8 +42,8 @@ typedef struct midi_config_
     // serial descripter file
     int         sfd;        
 
-    // current relay mask (support 128 relays)
-    char        bitmask[16];
+    // current relay mask (support 256 relays)
+    char        bitmask[BITMASK_SIZE];
 
     // relay map
     char        map[128][16];

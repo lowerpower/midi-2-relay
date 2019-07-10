@@ -120,6 +120,57 @@ init_serial(MIDI *midi)
     return(0);
 }
 
+int
+process_midi_system(MIDI *midi, int command)
+{
+    int ret = 0;
+
+    // Just look at high nibble for type
+    switch (command)
+    {
+    case 0x80:  /*note off */
+    default:
+        break;
+    }
+    return(ret);
+}
+
+int
+set_relay_map(MIDI *midi, int bit, int state)
+{
+    int index, mask;
+    int ret = 1;
+
+    // calculate relay bit position
+    index = bit / 8;
+    mask = 1 << (bit % 8);
+
+    DEBUG1("setting index %d mask %d to %d\n", index, mask, state);
+    if (state)
+    {
+        // Set the bit
+        midi->bitmask[index] |= mask;
+    }
+    else
+    {
+        // clear the bit
+        midi->bitmask[index] &= ~mask;
+    }
+    return(ret);
+}
+
+
+int process_midi_note_on(MIDI *midi, int key, int channel, int velocity)
+{
+    return(set_relay_map(midi, midi->map[key][channel], 1));
+}
+
+int process_midi_note_off(MIDI *midi,int key, int channel)
+{
+    return(set_relay_map(midi, midi->map[key][channel], 0));
+}
+
+
 //
 // Return 1 if we can process tyis type
 //
@@ -150,31 +201,52 @@ support_midi_byte_type(char type)
     case 0xf0:  /* System */
         ret = 1;
         break;
-    defaut:
+    default:
         break;
     }
     return(ret);
 }
 
 
-void
+int
 process_midi_command(MIDI *midi)
 {
+    int ret = 0;
+    int channel = 0;
+    int key = 0;
+    int velocity = 0;
+
+    channel = (midi->status & 0xf);
+    key = (midi->data1);
+    velocity = (midi->data2);
+
     // process the midi command 
-    swich (midi->status & 0xf0)
+    switch (midi->status & 0xf0)
     {
     case 0x80:  /*note off */
-        process_midi_note_off(midi);
+        DEBUG1("Turn Note %d on channel %d off\n", key, channel);
+        process_midi_note_off(midi,key,channel);
         ret = 1;
         break;
     case 0x90:  /*note on */
-        process_midi_note_on(midi);
+        if (0 == velocity)
+        {
+            DEBUG1("Turn Note %d on channel %d off\n", key, channel);
+            process_midi_note_off(midi, key, channel);
+        }
+        else
+        {
+            DEBUG1("Turn Note %d on channel %d on\n", key, channel);
+            process_midi_note_on(midi,key,channel,velocity);
+        }
         break;
     case 0xf0:  /* System */
-        process_midi_system(midi);
+        process_midi_system(midi, midi->status & 0xf0);
+        break;
+    default:
         break;
     }
-
+    return(ret);
 }
 
 //
@@ -432,7 +504,12 @@ int main(int argc, char **argv)
 #endif
 
         // check background every so often
-        //load_map_if_new(midi);
+        if ((second_count() - timestamp) > 15)
+        {
+            DEBUG1("load map file check\n");
+            load_map_if_new(midi);
+            timestamp = second_count();
+        }
     }
 	
 

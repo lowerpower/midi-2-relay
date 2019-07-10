@@ -67,5 +67,8 @@
     <Text Include="map.txt">
       <Filter>resource_files</Filter>
     </Text>
+    <Text Include="test.txt">
+      <Filter>resource_files</Filter>
+    </Text>
   </ItemGroup>
 </Project>
