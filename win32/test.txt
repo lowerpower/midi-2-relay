@@ -1,0 +1,21 @@
+FF 
+FF 
+FE FE FE FE FE 
+# Note on
+90 01 01
+#note off
+80 01 00
+FE FE
+#Note on
+90 01 01
+#note off
+90 01 01
+#note on bitmask first 8 note
+90 00 01
+90 01 01
+90 02 01
+90 03 01
+90 04 01
+90 05 01
+90 06 01
+01
