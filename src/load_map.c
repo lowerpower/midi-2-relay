@@ -91,7 +91,7 @@ load_map(MIDI *midi)
 			if(strlen(line_ptr)==0)
 				continue;
 
-			DEBUG1("read->%s\n",line_ptr);
+			DEBUG2("read->%s\n",line_ptr);
 
             // Get Rid of whitespace
             while(' '==*line_ptr)
@@ -135,7 +135,7 @@ load_map(MIDI *midi)
                 continue;
 
 			// Got valid configuration write it to map  
-			if(midi->verbose)
+			if(midi->verbose>1)
 			    printf("Loading Note %d, channel %d to relay %d\n",note,channel,relay);
 			
 			// load it
