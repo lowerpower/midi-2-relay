@@ -10,8 +10,10 @@
 #include "config.h"
 #include "debug.h"
 #include "arch.h"
+#include "net.h"
 #include "midi.h"
 #include "load_map.h"
+#include "daemonize.h"
 #if defined(WIN32)
 #include "wingetopt.h"
 #else
@@ -96,6 +98,7 @@ BOOL WINAPI ConsoleHandler(DWORD CEvent)
 #endif
 
 
+int
 init_serial(MIDI *midi)
 {
 #if !defined(WIN32)
@@ -193,23 +196,39 @@ int Bitmask_2_String(MIDI *midi)
     return(1);
 }
 
+
+int Send_UDP(MIDI *midi, char *buffer, int buffer_size)
+{
+    int ret;
+    struct sockaddr_in  client;
+
+    // udp send the set command
+    client.sin_family = AF_INET;
+    client.sin_addr.s_addr = midi->target_ip.ip32;
+    client.sin_port = htons((U16)(midi->target_port));
+
+
+    if(midi->verbose>1) printf("sendto %s target port %d\n",buffer,midi->target_port);
+
+    ret = sendto(midi->soc, buffer, buffer_size, 0, (struct sockaddr *)&client, sizeof(struct sockaddr));
+	
+	midi->send_timer=second_count();
+
+    return(ret);
+
+}
+
+
 int Send_Bitmask_2_relay(MIDI *midi)
 {
 	int ret;
-    struct sockaddr_in	client;
 	char command_buffer[BUFFER_SIZE];
 
     Bitmask_2_String(midi);
-
-    // udp send the set command
-	client.sin_family = AF_INET;
-    client.sin_addr.s_addr = midi->target_ip.ip32;
-    client.sin_port = htons((U16)(midi->target_port));
-	//
-	//    
 	sprintf(command_buffer,"set %s",midi->bit_string);
 
-	ret = sendto(midi->soc, (char *)command_buffer, strlen(command_buffer), 0, (struct sockaddr *)&client, sizeof(struct sockaddr));    
+    ret=Send_UDP(midi, command_buffer, strlen(command_buffer));
+
 	return(ret);
 }
 
@@ -314,7 +333,7 @@ process_midi_command(MIDI *midi)
 void
 process_midi_byte(MIDI *midi, char byte)
 {
-    char type = 0;
+    //char type = 0;
 
     // is status byte?
     if (0x80 & byte)
@@ -370,6 +389,27 @@ process_midi_byte(MIDI *midi, char byte)
         }
     }
 }
+
+
+int process_udp_in(MIDI *midi)
+{
+    struct sockaddr_in  client;
+    char                message[1025];
+    int slen,ret=0;
+    // just dump reply for now
+    
+    memset(&client,'\0',sizeof(struct sockaddr));
+    slen=sizeof(struct sockaddr_in);
+    ret=recvfrom(midi->soc, (char *)message, 1024, 0, (struct sockaddr *)&client, (socklen_t *) &slen);
+    if(ret>0)
+    {
+        message[ret]=0;
+        if(midi->verbose>1) printf("Incomming->%s",message);
+    }
+
+    return(ret);
+}
+
 //
 // Banner for Software
 //
@@ -403,7 +443,7 @@ void usage(int argc, char **argv)
 int main(int argc, char **argv)
 {
     int				c;
-    int             file_ret = 0;
+    //int             file_ret = 0;
     U32				timestamp = second_count();
     MIDI            midi_static;
     MIDI            *midi=&midi_static;
@@ -413,7 +453,7 @@ int main(int argc, char **argv)
 	IPADDR			our_ip;
 #if !defined(WIN32)
     char            buf2[8];
-    struct termios  options;
+    //struct termios  options;
 #endif
 
 
@@ -422,10 +462,10 @@ int main(int argc, char **argv)
     strcpy(midi->map_file, "map.txt");
     midi->target_port=1027;
     strcpy(midi->target_host,"127.0.0.1");
-    midi->target_ip.ipb1=1;
+    midi->target_ip.ipb1=127;
     midi->target_ip.ipb2=0;
     midi->target_ip.ipb3=0;
-    midi->target_ip.ipb4=127;
+    midi->target_ip.ipb4=1;
     //
     // Banner
     startup_banner();
@@ -573,6 +613,7 @@ int main(int argc, char **argv)
         printf("Failed to bind socket\n");
         exit(1);
     }
+    printf("socket bound\n");
     set_sock_nonblock(midi->soc);
 
 #if !defined(WIN32)
@@ -605,22 +646,28 @@ int main(int argc, char **argv)
         // Read a byte from the serial port
 #if !defined(WIN32)
         // read a byte from serial midi interface        
-        //printf("read\n");
         count = read(midi->sfd, buf2, 1);
-        //printf("got it\n");
-        process_midi_byte(midi, buf2[0]);
+        if(count)
+            process_midi_byte(midi, buf2[0]);
         buf2[1] = 0;
         //printf("count= %d  --> %x\n", count, buf2[0]);
 
         // Check UDP read socke
 #endif
 
+        process_udp_in(midi);
         // check background every so often
-        if ((second_count() - timestamp) > 15)
+        if ((second_count() - timestamp) > 30)
         {
             DEBUG1("load map file check\n");
             load_map_if_new(midi);
             timestamp = second_count();
+
+            // Send Ping
+            if((second_count()-midi->send_timer) > 60)
+            {
+                Send_UDP(midi, "ping", strlen("ping"));
+            }
         }
     }
 	

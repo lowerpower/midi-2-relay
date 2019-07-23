@@ -38,6 +38,7 @@ typedef struct midi_config_
     IPADDR      target_ip;
     U16         target_port;
     SOCKET		soc;
+    U32         send_timer;
     //
     int         verbose;
     int         log_level;
