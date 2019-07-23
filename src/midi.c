@@ -34,7 +34,8 @@ U8				        global_flag = 0;
 void
 termination_handler(int signum)
 {
-    if (global_midi->verbose) printf("term handler for signal %d\n", signum);
+    //if (global_midi->verbose) printf("term handler for signal %d\n", signum);
+    printf("term handler for signal %d\n", signum);
 
     //sprintf(global_midi->last_msg, "term handler for signal %d\n", signum);
     //write_statistics(global_chat_ptr);
@@ -63,6 +64,7 @@ termination_handler(int signum)
 #endif
         exit(11);
     }
+
 }
 
 #else
@@ -97,6 +99,7 @@ BOOL WINAPI ConsoleHandler(DWORD CEvent)
 init_serial(MIDI *midi)
 {
 #if !defined(WIN32)
+        struct termios options;
     //
     // Open Serial Port (note that this config is for raspberry pi 3 with serial port configured for midi)
     //
@@ -142,10 +145,10 @@ set_relay_map(MIDI *midi, int bit, int state)
     int ret = 1;
 
     // calculate relay bit position
-    index = bit / 8;
-    mask = 1 << (bit % 8);
+    index = (bit-1) / 8;
+    mask = 1 << ((bit-1) % 8);
 
-    DEBUG1("setting index %d mask %d to %d\n", index, mask, state);
+    DEBUG2("setting index %d mask %d to %d\n", index, mask, state);
     if (state)
     {
         // Set the bit
@@ -156,18 +159,73 @@ set_relay_map(MIDI *midi, int bit, int state)
         // clear the bit
         midi->bitmask[index] &= ~mask;
     }
+
     return(ret);
+}
+
+
+int Bitmask_2_String(MIDI *midi)
+{
+    int     i,on=0;
+    char    tstr[BUFFER_SIZE];
+
+
+    midi->bit_string[0]=0;
+
+    for(i=BITMASK_SIZE-1;i>=0;i--)
+    {
+        if(midi->bitmask[i])
+        {
+            on=1;
+            sprintf(tstr,"%x",midi->bitmask[i]);
+            strcat(midi->bit_string,tstr);
+        }
+        else if(on)
+        {
+            strcat(midi->bit_string,"00");
+        }
+    }
+    
+    if(0==strlen(midi->bit_string))
+        strcat(midi->bit_string,"0");
+
+    if(midi->verbose>2) printf("new bitstring %s\n",midi->bit_string);
+    return(1);
+}
+
+int Send_Bitmask_2_relay(MIDI *midi)
+{
+	int ret;
+    struct sockaddr_in	client;
+	char command_buffer[BUFFER_SIZE];
+
+    Bitmask_2_String(midi);
+
+    // udp send the set command
+	client.sin_family = AF_INET;
+    client.sin_addr.s_addr = midi->target_ip.ip32;
+    client.sin_port = htons((U16)(midi->target_port));
+	//
+	//    
+	sprintf(command_buffer,"set %s",midi->bit_string);
+
+	ret = sendto(midi->soc, (char *)command_buffer, strlen(command_buffer), 0, (struct sockaddr *)&client, sizeof(struct sockaddr));    
+	return(ret);
 }
 
 
 int process_midi_note_on(MIDI *midi, int key, int channel, int velocity)
 {
-    return(set_relay_map(midi, midi->map[key][channel], 1));
+    set_relay_map(midi, midi->map[key][channel], 1);
+    Send_Bitmask_2_relay(midi);
+    return(1);
 }
 
 int process_midi_note_off(MIDI *midi,int key, int channel)
 {
-    return(set_relay_map(midi, midi->map[key][channel], 0));
+    set_relay_map(midi, midi->map[key][channel], 0);
+    Send_Bitmask_2_relay(midi);
+    return(1);
 }
 
 
@@ -202,6 +260,7 @@ support_midi_byte_type(char type)
         ret = 1;
         break;
     default:
+        printf("unsupported %x\n",(type & 0xf0));
         break;
     }
     return(ret);
@@ -224,19 +283,19 @@ process_midi_command(MIDI *midi)
     switch (midi->status & 0xf0)
     {
     case 0x80:  /*note off */
-        DEBUG1("Turn Note %d on channel %d off\n", key, channel);
+        if(midi->verbose>1) printf("Turn Note %d on channel %d off velocity %d\n", key, channel, velocity);
         process_midi_note_off(midi,key,channel);
         ret = 1;
         break;
     case 0x90:  /*note on */
         if (0 == velocity)
         {
-            DEBUG1("Turn Note %d on channel %d off\n", key, channel);
+            if(midi->verbose>1) printf("Turn Note %d on channel %d off (note on velocity=0)\n", key, channel);
             process_midi_note_off(midi, key, channel);
         }
         else
         {
-            DEBUG1("Turn Note %d on channel %d on\n", key, channel);
+            if(midi->verbose>1) printf("Turn Note %d on channel %d on velocity %d\n", key, channel,velocity);
             process_midi_note_on(midi,key,channel,velocity);
         }
         break;
@@ -275,10 +334,23 @@ process_midi_byte(MIDI *midi, char byte)
         // 
         // do we support this type?
         //
-        if (support_midi_byte_type(midi->type))
+        if (support_midi_byte_type(midi->status))
         {
-            // we process this type, set counter to 1
-            midi->counter = 1;
+            if(0xf0==(midi->status & 0xf0))
+            {
+                // System bytes are only 1 byte
+                process_midi_system(midi, midi->status & 0xf0);
+            }
+            else
+            {
+                // we process this type, set counter to 1
+                DEBUG2("we support this set counter to 1\n");
+                midi->counter = 1;
+            }
+        }
+        else
+        {
+            //printf("Unsupported %x\n",(0xf0 & byte));
         }
         // done processing status byte
         return;
@@ -292,6 +364,7 @@ process_midi_byte(MIDI *midi, char byte)
         }
         else
         {
+            midi->data2=byte;
             process_midi_command(midi);
             midi->counter = 1;
         }
@@ -335,6 +408,9 @@ int main(int argc, char **argv)
     MIDI            midi_static;
     MIDI            *midi=&midi_static;
     int             count = 0;
+	char			tbuffer[BUFFER_SIZE];
+    char            *subst;
+	IPADDR			our_ip;
 #if !defined(WIN32)
     char            buf2[8];
     struct termios  options;
@@ -344,7 +420,12 @@ int main(int argc, char **argv)
     // Set defaults
     memset(midi,0,sizeof(MIDI));
     strcpy(midi->map_file, "map.txt");
-
+    midi->target_port=1027;
+    strcpy(midi->target_host,"127.0.0.1");
+    midi->target_ip.ipb1=1;
+    midi->target_ip.ipb2=0;
+    midi->target_ip.ipb3=0;
+    midi->target_ip.ipb4=127;
     //
     // Banner
     startup_banner();
@@ -426,8 +507,27 @@ int main(int argc, char **argv)
             break;
         case 't':
             //target Port
-           //midi->target_port = atoi(optarg);
-           // midi->target_host = atoi(optarg);
+            // Fix this to preserve command line
+            // Specify serve to connect to <ip:port>
+            // copy optarg to a temp buffer so we do not disterb the system argc
+			memset(tbuffer, 0, BUFFER_SIZE);
+			strncpy(tbuffer,optarg , BUFFER_SIZE-1);
+
+            subst = strchr(tbuffer, ':');
+            if (subst)
+            	*subst = '\0';
+
+            strncpy((char *)midi->target_host, tbuffer, MAX_PATH-1);
+            midi->target_host[MAX_PATH - 1] = 0;
+            if (subst)
+            {
+            	*subst = ':';
+
+                if (++subst)
+                {
+                	midi->target_port = (U16)atoi(subst);
+                }
+            }
             break;
         case 'd':
             // Startup as daemon with pid file
@@ -436,7 +536,6 @@ int main(int argc, char **argv)
             global_flag = global_flag | GF_DAEMON;
             break;
         case 'v':
-            midi->verbose++;
             break;
         case 'f':
             // Do nothing, did it above
@@ -452,6 +551,9 @@ int main(int argc, char **argv)
     argc -= optind;
     argv += optind;
 
+
+    if(midi->verbose) printf("verbose level at %d\n",midi->verbose);
+
     //
     // Load Map File
     //
@@ -463,7 +565,15 @@ int main(int argc, char **argv)
         return(1);
     }
 
-  
+    // Init UDP socket
+	our_ip.ip32=0;
+    midi->soc=udp_listener(0, our_ip);
+    if(midi->soc<0)
+    {
+        printf("Failed to bind socket\n");
+        exit(1);
+    }
+    set_sock_nonblock(midi->soc);
 
 #if !defined(WIN32)
     //
@@ -471,18 +581,18 @@ int main(int argc, char **argv)
     //
     if (global_flag&GF_DAEMON)
     {
-        if (sc.verbose) printf("Calling Daemonize\n");
+        if (midi->verbose) printf("Calling Daemonize\n");
 
         // Setup logging
         openlog("midi_processor", LOG_PID | LOG_CONS, LOG_USER);
         syslog(LOG_INFO, "Midi Processor built "__DATE__ " at " __TIME__ "\n");
         syslog(LOG_INFO, "   Version " VERSION " -  (c)2019 mycal.net All Rights Reserved\n");
         syslog(LOG_INFO, "Starting up as daemon\n");
-        syslog(LOG_INFO, "Bound to UDP %d.%d.%d.%d:%d on socket %d\n", sc.Bind_IP.ipb1, sc.Bind_IP.ipb2, sc.Bind_IP.ipb3, sc.Bind_IP.ipb4, sc.udp_listen_port, sc.udp_listen_soc);
+        //syslog(LOG_INFO, "Bound to UDP %d.%d.%d.%d:%d on socket %d\n", sc.Bind_IP.ipb1, sc.Bind_IP.ipb2, sc.Bind_IP.ipb3, sc.Bind_IP.ipb4, sc.udp_listen_port, sc.udp_listen_soc);
 
 
         // Daemonize this
-        daemonize(sc.pidfile, sc.run_as_user, 0, 0, 0, 0, 0);
+        daemonize(midi->pidfile, midi->run_as_user, 0, 0, 0, 0, 0);
     }
 #endif
 
@@ -495,12 +605,14 @@ int main(int argc, char **argv)
         // Read a byte from the serial port
 #if !defined(WIN32)
         // read a byte from serial midi interface        
+        //printf("read\n");
         count = read(midi->sfd, buf2, 1);
+        //printf("got it\n");
         process_midi_byte(midi, buf2[0]);
         buf2[1] = 0;
-        printf("count= %d  --> %x\n", count, buf2[0]);
+        //printf("count= %d  --> %x\n", count, buf2[0]);
 
-
+        // Check UDP read socke
 #endif
 
         // check background every so often
