@@ -459,7 +459,7 @@ int main(int argc, char **argv)
 
     // Set defaults
     memset(midi,0,sizeof(MIDI));
-    strcpy(midi->map_file, "map.txt");
+    strcpy(midi->map_file, "/var/www/html/uploads/map.txt");
     midi->target_port=1027;
     strcpy(midi->target_host,"127.0.0.1");
     midi->target_ip.ipb1=127;

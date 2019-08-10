@@ -1,5 +1,5 @@
 
-TARGET	= midi 
+TARGET	= midi2relay 
 
 all: $(TARGET)
 
