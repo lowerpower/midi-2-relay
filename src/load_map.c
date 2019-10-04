@@ -144,6 +144,7 @@ load_map(MIDI *midi)
 
             //load the currently loaded file with info
             stat(midi->map_file, &midi->map_file_info);
+            fflush(stdout);
         }
     }
     if(fp)
