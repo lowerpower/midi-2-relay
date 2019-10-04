@@ -638,6 +638,8 @@ int main(int argc, char **argv)
 #endif
 
 
+    // initialize send timer
+    midi->send_timer=second_count();
 
     // Read Forever, or until killed
     go = 1;
@@ -666,9 +668,11 @@ int main(int argc, char **argv)
             // Send Ping
             if((second_count()-midi->send_timer) > 60)
             {
+                // send timer updated in send_udp
                 Send_UDP(midi, "ping", strlen("ping"));
             }
         }
+        fflush(stdout);
     }
 	
 
