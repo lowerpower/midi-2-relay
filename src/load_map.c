@@ -43,7 +43,7 @@ load_map_if_new(MIDI *midi)
         if ((difftime(old_time, midi->map_file_info.st_mtime)) || (0 == old_time))
         {
             // File has changed, reload
-            if (midi->verbose > 1) ytprintf("Reload Map File\n");
+            //if (midi->verbose > 0) ytprintf("Reload Map File %s\n",midi->map_file);
             return(load_map(midi));
         }
     }
@@ -81,6 +81,7 @@ load_map(MIDI *midi)
 	}
 	else
 	{
+        if (midi->verbose > 0) ytprintf("Reload Map File %s\n",midi->map_file);
 	    // map file is open, clear out the midi map
 	    memset(midi->map,0,sizeof(midi->map));
         // File is open, read the config
@@ -143,6 +144,7 @@ load_map(MIDI *midi)
 
             //load the currently loaded file with info
             stat(midi->map_file, &midi->map_file_info);
+            fflush(stdout);
         }
     }
     if(fp)
