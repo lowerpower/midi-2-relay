@@ -28,8 +28,7 @@ LIBS_INC        =
 DEPENDALL	= mytypes.h midi.h file_config.h load_map.h yselect.h net.h webio.h yselect.h daemonize.h
 
 #Objects
-OBJ	= midi.c load_map.c net.c webio.c arch.c log.c daemonize.c
-:w
+OBJ	= midi.c load_map.c net.c webio.c arch.c log.c daemonize.c 
 OBJ    += yselect.c
 
 $(TARGET): $(OBJ) 
