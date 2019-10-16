@@ -39,6 +39,7 @@ termination_handler(int signum)
 {
     //if (global_midi->verbose) printf("term handler for signal %d\n", signum);
     printf("term handler for signal %d\n", signum);
+    fflush(stdout);
 
     //sprintf(global_midi->last_msg, "term handler for signal %d\n", signum);
     //write_statistics(global_chat_ptr);
@@ -47,6 +48,7 @@ termination_handler(int signum)
     if ((SIGFPE == signum) || (SIGSEGV == signum) || (11 == signum))
     {
         yprintf("Midi Processor Terminated from Signal %d\n", signum);
+        fflush(stdout);
         if (global_flag&GF_DAEMON) syslog(LOG_ERR, "Midi Processor Terminated from Signal 11\n");
 
 #if defined(BACKTRACE_SYMBOLS)
@@ -663,9 +665,9 @@ int main(int argc, char **argv)
         sel=0;
         // Read a byte from the serial port
         // read a byte from serial midi interface
-        read_count=Yoics_Select(1000);
         
-        if(read_count)
+        read_count=Yoics_Select(100);
+        if(read_count>0)
         {
             if(Yoics_Is_Select(midi->sfd))
             {
@@ -751,7 +753,8 @@ int main(int argc, char **argv)
     }
 	
 
-printf("shutdown\n");
+    printf("shutdown\n");
+    fflush(stdout);
 
 	return 0;
 }
