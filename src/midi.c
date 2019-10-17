@@ -39,6 +39,7 @@ termination_handler(int signum)
 {
     //if (global_midi->verbose) printf("term handler for signal %d\n", signum);
     printf("term handler for signal %d\n", signum);
+    fflush(stdout);
 
     //sprintf(global_midi->last_msg, "term handler for signal %d\n", signum);
     //write_statistics(global_chat_ptr);
@@ -47,6 +48,7 @@ termination_handler(int signum)
     if ((SIGFPE == signum) || (SIGSEGV == signum) || (11 == signum))
     {
         yprintf("Midi Processor Terminated from Signal %d\n", signum);
+        fflush(stdout);
         if (global_flag&GF_DAEMON) syslog(LOG_ERR, "Midi Processor Terminated from Signal 11\n");
 
 #if defined(BACKTRACE_SYMBOLS)
@@ -107,7 +109,8 @@ init_serial(MIDI *midi)
     //
     // Open Serial Port (note that this config is for raspberry pi 3 with serial port configured for midi)
     //
-    midi->sfd = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY);
+    midi->sfd = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY | O_NDELAY);
+    //midi->sfd = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY );
     if (midi->sfd == -1) {
         printf("Error no is : %d\n", errno);
         printf("Error description is : %s\n", strerror(errno));
@@ -121,7 +124,9 @@ init_serial(MIDI *midi)
     options.c_cflag |= CLOCAL;
     options.c_cflag |= CREAD;
     options.c_cc[VMIN]  = 1 ;//should_block ? 1 : 0;
-    //options.c_cc[VTIME] = 1; 
+    //options.c_cc[VMIN]  = 0 ;//should_block ? 1 : 0;
+    options.c_cc[VTIME] = 0; 
+    //options.c_cc[VTIME] = 2; 
     cfmakeraw(&options);
     tcsetattr(midi->sfd, TCSANOW, &options);
 #endif
@@ -218,6 +223,8 @@ int Send_UDP(MIDI *midi, char *buffer, int buffer_size)
     ret = sendto(midi->soc, buffer, buffer_size, 0, (struct sockaddr *)&client, sizeof(struct sockaddr));
 	
 	midi->send_timer=second_count();
+
+    ysleep_usec(5);
 
     return(ret);
 
@@ -449,7 +456,7 @@ void usage(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-    int				c;
+    int				c,sel;
     //int             file_ret = 0;
     U32				timestamp = second_count();
     MIDI            midi_static;
@@ -657,61 +664,99 @@ int main(int argc, char **argv)
     Yoics_Set_Select_rx(midi->sfd);
     while (go)
     {
+        sel=0;
         // Read a byte from the serial port
-#if !defined(WIN32)
-
         // read a byte from serial midi interface
+        
         read_count=Yoics_Select(100);
-        if(read_count)
+        if(read_count>0)
         {
             if(Yoics_Is_Select(midi->sfd))
             {
-            
+                sel=1;
                 count = read(midi->sfd, buf2, 1);
                 if(count)
+                {
+                //    printf("count=%d\n",count);
                     process_midi_byte(midi, buf2[0]);
+                }
                 else
-                    printf(".");
+                {
+                    if(midi->verbose>1)
+                    {
+                        printf(".");
+                        fflush(stdout);
+                    }
+                }
                 buf2[1] = 0;
                 //printf("count= %d  --> %x\n", count, buf2[0]);
             }
             else
-                printf(",");
-        }
-
-        // Check UDP read socke
-#endif
-        if(Yoics_Is_Select(midi->soc))
-        {
-            int udp_read=1;
-            int max_read=3;
-
-            while(udp_read && max_read--)
             {
-                udp_read=process_udp_in(midi);
+                if(midi->verbose>1)
+                {
+                    printf(",");
+                    ysleep_usec(1000); 
+                    fflush(stdout);
+                }
+                ysleep_usec(10); 
+            }
+            // Check UDP read socke
+            if(Yoics_Is_Select(midi->soc))
+            {
+                int udp_read=1;
+                int max_read=3;
+           
+                if(midi->verbose>2)
+                {
+                    printf("is udp select\n");
+                    fflush(stdout);
+                }
+                sel=1;
+                while(udp_read && max_read--)
+                {
+                    udp_read=process_udp_in(midi);
+                }
+            }
+            if(0==sel)
+            {
+                if(midi->verbose>1)
+                {
+                    printf("selected but no select handled\n");
+                    fflush(stdout);
+                }
+            }
+        }
+        else
+        {
+            if(midi->verbose>2)
+            {
+                printf("readc=%d\n",read_count);
+                fflush(stdout);
             }
         }
 
         // check background every so often
-        if ((second_count() - timestamp) > 30)
+        if ((second_count() - timestamp) > 60)
         {
             DEBUG1("load map file check\n");
             load_map_if_new(midi);
             timestamp = second_count();
+        }
 
-            // Send Ping
-            if((second_count()-midi->send_timer) > 60)
-            {
-                // send timer updated in send_udp
+        // Send Ping
+        if((second_count()-midi->send_timer) > 65)
+        {
+            // send timer updated in send_udp
                 if(midi->verbose>1) printf("Send Timer Expired, send ping.\n");
                 Send_UDP(midi, "ping", strlen("ping"));
-            }
         }
         fflush(stdout);
     }
 	
 
-printf("shutdown\n");
+    printf("shutdown\n");
+    fflush(stdout);
 
 	return 0;
 }
