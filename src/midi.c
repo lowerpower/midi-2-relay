@@ -154,7 +154,8 @@ set_relay_map(MIDI *midi, int bit, int state)
     index = (bit-1) / 8;
     mask = 1 << ((bit-1) % 8);
 
-    DEBUG1("setting index %d mask %d to %d (current %x)\n", index, mask, state,midi->bitmask[index]);
+    DEBUG1("setting index %d mask %d to %d (current %x) for bit %d\n", index, mask, state,midi->bitmask[index],bit);
+
     if (state)
     {
         // Set the bit
@@ -183,7 +184,8 @@ int Bitmask_2_String(MIDI *midi)
         if(midi->bitmask[i])
         {
             on=1;
-            sprintf(tstr,"%x",midi->bitmask[i]);
+            sprintf(tstr,"%02x",midi->bitmask[i]);
+            DEBUG1("bitmask %d = %s\n",i,tstr);
             strcat(midi->bit_string,tstr);
         }
         else if(on)
