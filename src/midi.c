@@ -134,6 +134,15 @@ init_serial(MIDI *midi)
     return(0);
 }
 
+
+void
+reset_relay(MIDI *midi)
+{
+    memset(midi->bitmask,0,BITMASK_SIZE);
+    Send_UDP(midi, "set 0", strlen("set 0"));
+
+}
+
 int
 process_midi_system(MIDI *midi, int command)
 {
@@ -264,7 +273,7 @@ int process_midi_note_off(MIDI *midi,int key, int channel)
 // Return 1 if we can process tyis type
 //
 int
-support_midi_byte_type(char type)
+support_midi_byte_type(MIDI *midi, char type)
 {
     int ret = 0;
 
@@ -280,6 +289,8 @@ support_midi_byte_type(char type)
     case 0xa0:  /*Polyphonic Pressure */
         break;
     case 0xb0:  /* Control Change */
+        printf("*****************************reset**\n");
+        reset_relay(midi);
         break;
     case 0xc0:  /* Program Change */
         break;
@@ -365,7 +376,7 @@ process_midi_byte(MIDI *midi, char byte)
         // 
         // do we support this type?
         //
-        if (support_midi_byte_type(midi->status))
+        if (support_midi_byte_type(midi, midi->status))
         {
             if(0xf0==(midi->status & 0xf0))
             {
