@@ -289,14 +289,16 @@ support_midi_byte_type(MIDI *midi, char type)
     case 0xa0:  /*Polyphonic Pressure */
         break;
     case 0xb0:  /* Control Change */
-        printf("*****************************reset**\n");
-        reset_relay(midi);
+        printf("*control change*\n");
+        //reset_relay(midi);
         break;
     case 0xc0:  /* Program Change */
         break;
     case 0xd0:  /* Channel Pressure */
         break;
     case 0xe0:  /* Pitch Bend */
+        printf("*pitch bend change*\n");
+        //reset_relay(midi);
         break;
     case 0xf0:  /* System */
         ret = 1;
