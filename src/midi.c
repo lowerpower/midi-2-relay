@@ -233,7 +233,7 @@ int Send_UDP(MIDI *midi, char *buffer, int buffer_size)
 	
 	midi->send_timer=second_count();
 
-    ysleep_usec(5);
+    //ysleep_usec(5);
 
     return(ret);
 
@@ -242,13 +242,24 @@ int Send_UDP(MIDI *midi, char *buffer, int buffer_size)
 
 int Send_Bitmask_2_relay(MIDI *midi)
 {
-	int ret;
+	int ret=0;
 	char command_buffer[BUFFER_SIZE];
+    static char        bit_string[BUFFER_SIZE];
 
     Bitmask_2_String(midi);
-	sprintf(command_buffer,"set %s",midi->bit_string);
+    
+    if(0!=strcmp(bit_string,midi->bit_string))
+	{
+	    sprintf(command_buffer,"set %s",midi->bit_string);
 
-    ret=Send_UDP(midi, command_buffer, strlen(command_buffer));
+        ret=Send_UDP(midi, command_buffer, strlen(command_buffer));
+
+        strcpy(midi->bit_string,bit_string);
+    }
+    else
+    {
+        DEBUG0("same skip\n");
+    }
 
 	return(ret);
 }
@@ -427,11 +438,11 @@ int process_udp_in(MIDI *midi)
     
     memset(&client,'\0',sizeof(struct sockaddr));
     slen=sizeof(struct sockaddr_in);
-    ret=recvfrom(midi->soc, (char *)message, 1024, 0, (struct sockaddr *)&client, (socklen_t *) &slen);
+    //ret=recvfrom(midi->soc, (char *)message, 1024, 0, (struct sockaddr *)&client, (socklen_t *) &slen);
     if(ret>0)
     {
         message[ret]=0;
-        if(midi->verbose>1) printf("Incomming->%s",message);
+        if(midi->verbose>3) printf("Incomming->%s",message);
     }
 
     return(ret);
@@ -695,7 +706,7 @@ int main(int argc, char **argv)
                 }
                 else
                 {
-                    if(midi->verbose>1)
+                    if(midi->verbose>2)
                     {
                         printf(".");
                         fflush(stdout);
@@ -706,7 +717,7 @@ int main(int argc, char **argv)
             }
             else
             {
-                if(midi->verbose>1)
+                if(midi->verbose>2)
                 {
                     printf(",");
                     ysleep_usec(1000); 
