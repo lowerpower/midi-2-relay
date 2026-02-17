@@ -32,7 +32,7 @@
 // Load the midi map file
 //
 int
-load_map(MIDI *midi)
+read_config(MIDI *midi)
 {
 	char	*subst;
 	char	*strt_p;
@@ -127,4 +127,3 @@ load_map(MIDI *midi)
         fclose(fp);
     return(ret);
 }
-

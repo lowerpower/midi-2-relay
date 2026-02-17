@@ -132,7 +132,7 @@ load_map(MIDI *midi)
                 continue;
             // get actual channel 
             relay=atoi(subst);
-            if((relay>127) || (relay<0))
+            if((relay>255) || (relay<1))
                 continue;
 
 			// Got valid configuration write it to map  
@@ -151,4 +151,3 @@ load_map(MIDI *midi)
         fclose(fp);
     return(ret);
 }
-

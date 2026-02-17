@@ -2,9 +2,8 @@
 #define __FILE_CONFIG_H_
 
 #include "mytypes.h"
-#include "mux.h"
+#include "midi.h"
 
-int read_config(MUX *mux);
+int read_config(MIDI *midi);
 
 #endif
-

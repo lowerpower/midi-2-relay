@@ -109,7 +109,7 @@ init_serial(MIDI *midi)
     //
     // Open Serial Port (note that this config is for raspberry pi 3 with serial port configured for midi)
     //
-    midi->sfd = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY | O_NDELAY);
+    midi->sfd = open(midi->serial_device, O_RDWR | O_NOCTTY | O_NDELAY);
     //midi->sfd = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY );
     if (midi->sfd == -1) {
         printf("Error no is : %d\n", errno);
@@ -163,6 +163,10 @@ set_relay_map(MIDI *midi, int bit, int state)
 {
     int index, mask;
     int ret = 1;
+
+    // Validate relay index (1..256). Ignore invalid/disabled entries.
+    if (bit <= 0 || bit > (BITMASK_SIZE * 8))
+        return(0);
 
     // calculate relay bit position
     index = (bit-1) / 8;
@@ -267,15 +271,15 @@ int Send_Bitmask_2_relay(MIDI *midi)
 
 int process_midi_note_on(MIDI *midi, int key, int channel, int velocity)
 {
-    set_relay_map(midi, midi->map[key][channel], 1);
-    Send_Bitmask_2_relay(midi);
+    if (set_relay_map(midi, midi->map[key][channel], 1))
+        Send_Bitmask_2_relay(midi);
     return(1);
 }
 
 int process_midi_note_off(MIDI *midi,int key, int channel)
 {
-    set_relay_map(midi, midi->map[key][channel], 0);
-    Send_Bitmask_2_relay(midi);
+    if (set_relay_map(midi, midi->map[key][channel], 0))
+        Send_Bitmask_2_relay(midi);
     return(1);
 }
 
@@ -438,7 +442,7 @@ int process_udp_in(MIDI *midi)
     
     memset(&client,'\0',sizeof(struct sockaddr));
     slen=sizeof(struct sockaddr_in);
-    //ret=recvfrom(midi->soc, (char *)message, 1024, 0, (struct sockaddr *)&client, (socklen_t *) &slen);
+    ret=recvfrom(midi->soc, (char *)message, 1024, 0, (struct sockaddr *)&client, (socklen_t *) &slen);
     if(ret>0)
     {
         message[ret]=0;
@@ -474,7 +478,8 @@ void usage(int argc, char **argv)
     printf("\t -v console debug output.\n");
     printf("\t -d runs the program as a daemon pid file must be specified.\n");
     printf("\t -f specify a config file.\n");
-    printf("\t -t target IP:Port (default 127.0.0.1:5998).\n");
+    printf("\t -t target IP:Port (default 127.0.0.1:1027).\n");
+    printf("\t -s serial device (default /dev/ttyAMA0).\n");
     exit(2);
 }
 
@@ -505,6 +510,8 @@ int main(int argc, char **argv)
     midi->target_ip.ipb2=0;
     midi->target_ip.ipb3=0;
     midi->target_ip.ipb4=1;
+    strncpy(midi->serial_device, "/dev/ttyAMA0", MAX_PATH-1);
+    midi->serial_device[MAX_PATH - 1] = 0;
     //
     // Banner
     startup_banner();
@@ -546,13 +553,15 @@ int main(int argc, char **argv)
     //
     // Load config file first
     //
-    while ((c = getopt(argc, argv, "f:u:l:d:vh")) != EOF)
+    while ((c = getopt(argc, argv, "f:u:l:d:t:s:vh")) != EOF)
     {
         switch (c)
         {
         case 0:
             break;
         case 't':
+            break;
+        case 's':
             break;
         case 'd':
             break;
@@ -575,7 +584,7 @@ int main(int argc, char **argv)
     // Load Command Line Args, they overrie config file, reset optarg=1 to rescan
     //
     optind = 1;
-    while ((c = getopt(argc, argv, "f:u:l:d:vh")) != EOF)
+    while ((c = getopt(argc, argv, "f:u:l:d:t:s:vh")) != EOF)
     {
         switch (c)
         {
@@ -608,6 +617,10 @@ int main(int argc, char **argv)
                 	midi->target_port = (U16)atoi(subst);
                 }
             }
+            break;
+        case 's':
+            strncpy(midi->serial_device, optarg, MAX_PATH-1);
+            midi->serial_device[MAX_PATH - 1] = 0;
             break;
         case 'd':
             // Startup as daemon with pid file
@@ -784,6 +797,3 @@ int main(int argc, char **argv)
 
 	return 0;
 }
-
-
-

@@ -46,6 +46,7 @@ typedef struct midi_config_
 
     // serial descripter file
     int         sfd;        
+    char        serial_device[MAX_PATH];
 
     // current relay mask (support 256 relays)
     char        bitmask[BITMASK_SIZE];
