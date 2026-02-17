@@ -191,7 +191,7 @@ set_relay_map(MIDI *midi, int bit, int state)
 
 int Bitmask_2_String(MIDI *midi)
 {
-    int     i,on=0;
+    int     i;
     char    tstr[BUFFER_SIZE];
 
 
@@ -199,21 +199,10 @@ int Bitmask_2_String(MIDI *midi)
 
     for(i=BITMASK_SIZE-1;i>=0;i--)
     {
-        if(midi->bitmask[i])
-        {
-            on=1;
-            sprintf(tstr,"%02x",midi->bitmask[i]);
-            DEBUG1("bitmask %d = %s\n",i,tstr);
-            strcat(midi->bit_string,tstr);
-        }
-        else if(on)
-        {
-            strcat(midi->bit_string,"00");
-        }
+        sprintf(tstr,"%02x",(unsigned char)midi->bitmask[i]);
+        DEBUG1("bitmask %d = %s\n",i,tstr);
+        strcat(midi->bit_string,tstr);
     }
-    
-    if(0==strlen(midi->bit_string))
-        strcat(midi->bit_string,"0");
 
     if(midi->verbose>2) printf("new bitstring %s\n",midi->bit_string);
     return(1);
@@ -248,17 +237,17 @@ int Send_Bitmask_2_relay(MIDI *midi)
 {
 	int ret=0;
 	char command_buffer[BUFFER_SIZE];
-    static char        bit_string[BUFFER_SIZE];
+    static char        last_bit_string[BUFFER_SIZE];
 
     Bitmask_2_String(midi);
     
-    if(0!=strcmp(bit_string,midi->bit_string))
+    if(0!=strcmp(last_bit_string,midi->bit_string))
 	{
 	    sprintf(command_buffer,"set %s",midi->bit_string);
 
         ret=Send_UDP(midi, command_buffer, strlen(command_buffer));
 
-        strcpy(midi->bit_string,bit_string);
+        strcpy(last_bit_string,midi->bit_string);
     }
     else
     {
@@ -480,6 +469,7 @@ void usage(int argc, char **argv)
     printf("\t -f specify a config file.\n");
     printf("\t -t target IP:Port (default 127.0.0.1:1027).\n");
     printf("\t -s serial device (default /dev/ttyAMA0).\n");
+    printf("\t -u UDP listen port (default 0=disabled).\n");
     exit(2);
 }
 
@@ -512,6 +502,7 @@ int main(int argc, char **argv)
     midi->target_ip.ipb4=1;
     strncpy(midi->serial_device, "/dev/ttyAMA0", MAX_PATH-1);
     midi->serial_device[MAX_PATH - 1] = 0;
+    midi->udp_listen_port=0;
     //
     // Banner
     startup_banner();
@@ -562,6 +553,8 @@ int main(int argc, char **argv)
         case 't':
             break;
         case 's':
+            break;
+        case 'u':
             break;
         case 'd':
             break;
@@ -622,6 +615,9 @@ int main(int argc, char **argv)
             strncpy(midi->serial_device, optarg, MAX_PATH-1);
             midi->serial_device[MAX_PATH - 1] = 0;
             break;
+        case 'u':
+            midi->udp_listen_port = (U16)atoi(optarg);
+            break;
         case 'd':
             // Startup as daemon with pid file
             printf("Starting up as daemon\n");
@@ -660,15 +656,26 @@ int main(int argc, char **argv)
 
     // Init UDP socket
 	our_ip.ip32=0;
-    midi->soc=udp_listener(0, our_ip);
+    if(midi->udp_listen_port > 0)
+    {
+        midi->soc=udp_listener(midi->udp_listen_port, our_ip);
+    }
+    else
+    {
+        midi->soc=socket(AF_INET, SOCK_DGRAM, 0);
+    }
     if(midi->soc<0)
     {
         printf("Failed to bind socket\n");
         exit(1);
     }
-    printf("socket bound\n");
+    if(midi->udp_listen_port > 0)
+        printf("socket bound\n");
+    else
+        printf("socket ready\n");
     set_sock_nonblock(midi->soc);
-    Yoics_Set_Select_rx(midi->soc);
+    if(midi->udp_listen_port > 0)
+        Yoics_Set_Select_rx(midi->soc);
 
 
 #if !defined(WIN32)
@@ -739,7 +746,7 @@ int main(int argc, char **argv)
                 ysleep_usec(10); 
             }
             // Check UDP read socke
-            if(Yoics_Is_Select(midi->soc))
+            if((midi->udp_listen_port > 0) && Yoics_Is_Select(midi->soc))
             {
                 int udp_read=1;
                 int max_read=3;

@@ -39,8 +39,7 @@ load_map_if_new(MIDI *midi)
 
     if (-1 != stat(midi->map_file, &midi->map_file_info))
     {
-        // Must use difftime to be completly portable
-        if ((difftime(old_time, midi->map_file_info.st_mtime)) || (0 == old_time))
+        if ((0 == old_time) || (midi->map_file_info.st_mtime != old_time))
         {
             // File has changed, reload
             //if (midi->verbose > 0) ytprintf("Reload Map File %s\n",midi->map_file);

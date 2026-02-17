@@ -53,7 +53,8 @@ typedef struct midi_config_
     char        bit_string[BUFFER_SIZE];
 
     // relay map
-    char        map[128][16];
+    U16         map[128][16];
+    U16         udp_listen_port;
 
     char        config_file[MAX_PATH];
     char        map_file[MAX_PATH];

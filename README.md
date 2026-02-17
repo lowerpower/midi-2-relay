@@ -33,6 +33,7 @@ Common options:
 - `-f <config_file>` reserved (not currently used).
 - `-t <ip:port>` target relay host/port (see notes below).
 - `-s <device>` serial device path (default `/dev/ttyAMA0`).
+- `-u <port>` UDP listen port (default `0`, disabled).
 
 ## Map File
 Default path in code:
