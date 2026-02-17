@@ -238,6 +238,11 @@ FakesAssemblies/
 **/*.HTMLClient/GeneratedArtifacts
 **/*.DesktopClient/GeneratedArtifacts
 **/*.DesktopClient/ModelManifest.xml
+
+# Local test build artifacts
+tests/*.o
+tests/*.d
+tests/unit_tests
 **/*.Server/GeneratedArtifacts
 **/*.Server/ModelManifest.xml
 _Pvt_Extensions

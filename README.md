@@ -19,6 +19,11 @@ cd src
 make
 ```
 
+Run automated tests:
+```sh
+make -C tests test
+```
+
 Windows:
 - Open `win32/midi.sln` in Visual Studio and build the `midi` project.
 
@@ -48,7 +53,7 @@ Format (one mapping per line):
 Valid ranges:
 - `note`: 0-127
 - `channel`: 0-15
- - `relay`: 0-127
+- `relay`: 1-255
 
 Lines starting with `#` are comments.
 
@@ -67,6 +72,7 @@ Lines starting with `#` are comments.
 ## Project Layout
 - `src/` core application and utilities
 - `test/` manual serial read test
+- `tests/` automated unit tests and test runner
 - `win32/` Visual Studio solution
 - `docs/` supporting documents
 
