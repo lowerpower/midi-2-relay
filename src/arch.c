@@ -142,23 +142,20 @@ strtolower(char *string)
 //
 U32 second_count(void)
 {
-	int	seconds;
+	U32	seconds = 0;
 	// grab a time value and return a 16 bit 10ms count used for timestamping - 1000=1second
 	//#if 0
 	//ftime() is obsolete everywhere except maybe embedded Linux?  
 	//OS X didn't get ftime() until OS X 10.4.  So we do this...
 	// BUT it doesn't work with Mike's code.  It does now....  defined(LINUX) ||
-#if  defined(MACOSX) || defined(__ECOS)
+#if  defined(MACOSX) || defined(__ECOS) || defined(LINUX)
 	struct timeval   Tp;
-	struct timezone  Tzp;
-    gettimeofday( &Tp, &Tzp );     /* get timeofday */
-	seconds=0;
+    gettimeofday(&Tp, NULL);
 	seconds=(U32)(Tp.tv_sec);
 #endif
-#if defined(LINUX) || defined(WIN32)
+#if defined(WIN32)
 	struct timeb    timebuffer;
 	ftime( &timebuffer );
-	seconds=0;
 	seconds=(U32)(timebuffer.time);
 #endif
 #if defined(WINCE)

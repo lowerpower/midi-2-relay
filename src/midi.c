@@ -25,6 +25,12 @@ volatile int             go = 0;
 MIDI                    *global_midi;
 U8				        global_flag = 0;
 
+#define MIDI_LOG(...) yprintf(__VA_ARGS__)
+#define MIDI_VLOG(midi, level, ...) \
+    do { if ((midi)->verbose >= (level)) yprintf(__VA_ARGS__); } while (0)
+
+int Send_UDP(MIDI *midi, char *buffer, int buffer_size);
+
 //typedef unsigned char U8;
 //typedef unsigned short U16;
 //typedef unsigned int  U32;
@@ -38,7 +44,7 @@ void
 termination_handler(int signum)
 {
     //if (global_midi->verbose) printf("term handler for signal %d\n", signum);
-    printf("term handler for signal %d\n", signum);
+    MIDI_LOG("term handler for signal %d\n", signum);
     fflush(stdout);
 
     //sprintf(global_midi->last_msg, "term handler for signal %d\n", signum);
@@ -112,8 +118,8 @@ init_serial(MIDI *midi)
     midi->sfd = open(midi->serial_device, O_RDWR | O_NOCTTY | O_NDELAY);
     //midi->sfd = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY );
     if (midi->sfd == -1) {
-        printf("Error no is : %d\n", errno);
-        printf("Error description is : %s\n", strerror(errno));
+        MIDI_LOG("Error no is : %d\n", errno);
+        MIDI_LOG("Error description is : %s\n", strerror(errno));
         return(-1);
     }
 
@@ -191,20 +197,19 @@ set_relay_map(MIDI *midi, int bit, int state)
 
 int Bitmask_2_String(MIDI *midi)
 {
-    int     i;
-    char    tstr[BUFFER_SIZE];
+    int i;
+    char *out = midi->bit_string;
+    static const char hex[] = "0123456789abcdef";
 
-
-    midi->bit_string[0]=0;
-
-    for(i=BITMASK_SIZE-1;i>=0;i--)
+    for (i = BITMASK_SIZE - 1; i >= 0; i--)
     {
-        sprintf(tstr,"%02x",(unsigned char)midi->bitmask[i]);
-        DEBUG1("bitmask %d = %s\n",i,tstr);
-        strcat(midi->bit_string,tstr);
+        unsigned char v = (unsigned char)midi->bitmask[i];
+        *out++ = hex[(v >> 4) & 0x0f];
+        *out++ = hex[v & 0x0f];
     }
+    *out = 0;
 
-    if(midi->verbose>2) printf("new bitstring %s\n",midi->bit_string);
+    MIDI_VLOG(midi, 3, "new bitstring %s\n", midi->bit_string);
     return(1);
 }
 
@@ -220,7 +225,7 @@ int Send_UDP(MIDI *midi, char *buffer, int buffer_size)
     client.sin_port = htons((U16)(midi->target_port));
 
 
-    if(midi->verbose>1) printf("sendto %s target port %d\n",buffer,midi->target_port);
+    MIDI_VLOG(midi, 2, "sendto %s target port %d\n", buffer, midi->target_port);
 
     ret = sendto(midi->soc, buffer, buffer_size, 0, (struct sockaddr *)&client, sizeof(struct sockaddr));
 	
@@ -243,9 +248,11 @@ int Send_Bitmask_2_relay(MIDI *midi)
     
     if(0!=strcmp(last_bit_string,midi->bit_string))
 	{
-	    sprintf(command_buffer,"set %s",midi->bit_string);
+        size_t bit_len = strlen(midi->bit_string);
+        memcpy(command_buffer, "set ", 4);
+        memcpy(command_buffer + 4, midi->bit_string, bit_len + 1);
 
-        ret=Send_UDP(midi, command_buffer, strlen(command_buffer));
+        ret=Send_UDP(midi, command_buffer, (int)(bit_len + 4));
 
         strcpy(last_bit_string,midi->bit_string);
     }
@@ -293,7 +300,7 @@ support_midi_byte_type(MIDI *midi, char type)
     case 0xa0:  /*Polyphonic Pressure */
         break;
     case 0xb0:  /* Control Change */
-        printf("*control change*\n");
+        MIDI_VLOG(midi, 2, "*control change*\n");
         //reset_relay(midi);
         break;
     case 0xc0:  /* Program Change */
@@ -301,14 +308,14 @@ support_midi_byte_type(MIDI *midi, char type)
     case 0xd0:  /* Channel Pressure */
         break;
     case 0xe0:  /* Pitch Bend */
-        printf("*pitch bend change*\n");
+        MIDI_VLOG(midi, 2, "*pitch bend change*\n");
         //reset_relay(midi);
         break;
     case 0xf0:  /* System */
         ret = 1;
         break;
     default:
-        printf("unsupported %x\n",(type & 0xf0));
+        MIDI_VLOG(midi, 2, "unsupported %x\n", (type & 0xf0));
         break;
     }
     return(ret);
@@ -331,19 +338,19 @@ process_midi_command(MIDI *midi)
     switch (midi->status & 0xf0)
     {
     case 0x80:  /*note off */
-        if(midi->verbose>1) printf("Turn Note %d on channel %d off velocity %d\n", key, channel, velocity);
+        MIDI_VLOG(midi, 2, "Turn Note %d on channel %d off velocity %d\n", key, channel, velocity);
         process_midi_note_off(midi,key,channel);
         ret = 1;
         break;
     case 0x90:  /*note on */
         if (0 == velocity)
         {
-            if(midi->verbose>1) printf("Turn Note %d on channel %d off (note on velocity=0)\n", key, channel);
+            MIDI_VLOG(midi, 2, "Turn Note %d on channel %d off (note on velocity=0)\n", key, channel);
             process_midi_note_off(midi, key, channel);
         }
         else
         {
-            if(midi->verbose>1) printf("Turn Note %d on channel %d on velocity %d\n", key, channel,velocity);
+            MIDI_VLOG(midi, 2, "Turn Note %d on channel %d on velocity %d\n", key, channel, velocity);
             process_midi_note_on(midi,key,channel,velocity);
         }
         break;
@@ -435,7 +442,7 @@ int process_udp_in(MIDI *midi)
     if(ret>0)
     {
         message[ret]=0;
-        if(midi->verbose>3) printf("Incomming->%s",message);
+        MIDI_VLOG(midi, 4, "Incomming->%s", message);
     }
 
     return(ret);
@@ -473,15 +480,19 @@ void usage(int argc, char **argv)
     exit(2);
 }
 
+#if !defined(UNIT_TEST)
 int main(int argc, char **argv)
 {
     int				c,sel;
     //int             file_ret = 0;
     U32				timestamp = second_count();
+    U32             now = timestamp;
     MIDI            midi_static;
     MIDI            *midi=&midi_static;
     int             count = 0;
     int             read_count;
+    U32             idle_read_markers = 0;
+    U32             idle_select_markers = 0;
 	char			tbuffer[BUFFER_SIZE];
     char            *subst;
 	IPADDR			our_ip;
@@ -620,7 +631,7 @@ int main(int argc, char **argv)
             break;
         case 'd':
             // Startup as daemon with pid file
-            printf("Starting up as daemon\n");
+            MIDI_LOG("Starting up as daemon\n");
             strncpy(midi->pidfile, optarg, MAX_PATH - 1);
             global_flag = global_flag | GF_DAEMON;
             break;
@@ -641,7 +652,7 @@ int main(int argc, char **argv)
     argv += optind;
 
 
-    if(midi->verbose) printf("verbose level at %d\n",midi->verbose);
+    MIDI_VLOG(midi, 1, "verbose level at %d\n", midi->verbose);
 
     //
     // Load Map File
@@ -650,7 +661,7 @@ int main(int argc, char **argv)
 
     if (0 > init_serial(midi))
     {
-        printf("exiting, serial port failed to initialize.\n");
+        MIDI_LOG("exiting, serial port failed to initialize.\n");
         return(1);
     }
 
@@ -666,13 +677,13 @@ int main(int argc, char **argv)
     }
     if(midi->soc<0)
     {
-        printf("Failed to bind socket\n");
+        MIDI_LOG("Failed to bind socket\n");
         exit(1);
     }
     if(midi->udp_listen_port > 0)
-        printf("socket bound\n");
+        MIDI_LOG("socket bound\n");
     else
-        printf("socket ready\n");
+        MIDI_LOG("socket ready\n");
     set_sock_nonblock(midi->soc);
     if(midi->udp_listen_port > 0)
         Yoics_Set_Select_rx(midi->soc);
@@ -684,7 +695,7 @@ int main(int argc, char **argv)
     //
     if (global_flag&GF_DAEMON)
     {
-        if (midi->verbose) printf("Calling Daemonize\n");
+        MIDI_VLOG(midi, 1, "Calling Daemonize\n");
 
         // Setup logging
         openlog("midi_processor", LOG_PID | LOG_CONS, LOG_USER);
@@ -726,9 +737,9 @@ int main(int argc, char **argv)
                 }
                 else
                 {
-                    if(midi->verbose>2)
+                    if ((midi->verbose >= 3) && ((++idle_read_markers & 0x3f) == 0))
                     {
-                        printf(".");
+                        MIDI_LOG(".");
                         fflush(stdout);
                     }
                 }
@@ -737,11 +748,14 @@ int main(int argc, char **argv)
             }
             else
             {
-                if(midi->verbose>2)
+                if (midi->verbose >= 3)
                 {
-                    printf(",");
-                    ysleep_usec(1000); 
-                    fflush(stdout);
+                    if ((++idle_select_markers & 0x3f) == 0)
+                    {
+                        MIDI_LOG(",");
+                        fflush(stdout);
+                    }
+                    ysleep_usec(1000);
                 }
                 ysleep_usec(10); 
             }
@@ -751,11 +765,8 @@ int main(int argc, char **argv)
                 int udp_read=1;
                 int max_read=3;
            
-                if(midi->verbose>2)
-                {
-                    printf("is udp select\n");
-                    fflush(stdout);
-                }
+                MIDI_VLOG(midi, 3, "is udp select\n");
+                if (midi->verbose >= 3) fflush(stdout);
                 sel=1;
                 while(udp_read && max_read--)
                 {
@@ -764,43 +775,39 @@ int main(int argc, char **argv)
             }
             if(0==sel)
             {
-                if(midi->verbose>1)
-                {
-                    printf("selected but no select handled\n");
-                    fflush(stdout);
-                }
+                MIDI_VLOG(midi, 2, "selected but no select handled\n");
+                if (midi->verbose >= 2) fflush(stdout);
             }
         }
         else
         {
-            if(midi->verbose>2)
-            {
-                printf("readc=%d\n",read_count);
-                fflush(stdout);
-            }
+            MIDI_VLOG(midi, 3, "readc=%d\n", read_count);
+            if (midi->verbose >= 3) fflush(stdout);
         }
 
+        now = second_count();
+
         // check background every so often
-        if ((second_count() - timestamp) > 60)
+        if ((now - timestamp) > 60)
         {
             DEBUG1("load map file check\n");
             load_map_if_new(midi);
-            timestamp = second_count();
+            timestamp = now;
         }
 
         // Send Ping
-        if((second_count()-midi->send_timer) > 65)
+        if((now-midi->send_timer) > 65)
         {
             // send timer updated in send_udp
-                if(midi->verbose>1) printf("Send Timer Expired, send ping.\n");
+                MIDI_VLOG(midi, 2, "Send Timer Expired, send ping.\n");
                 Send_UDP(midi, "ping", strlen("ping"));
         }
-        fflush(stdout);
     }
 	
 
-    printf("shutdown\n");
+    MIDI_LOG("shutdown\n");
     fflush(stdout);
 
 	return 0;
 }
+#endif
