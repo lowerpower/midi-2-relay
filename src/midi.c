@@ -164,6 +164,7 @@ int
 process_midi_system(MIDI *midi, int command)
 {
     int ret = 0;
+    (void)midi;
 
     // Just look at high nibble for type
     switch (command)
@@ -272,6 +273,7 @@ int Send_Bitmask_2_relay(MIDI *midi)
 
 int process_midi_note_on(MIDI *midi, int key, int channel, int velocity)
 {
+    (void)velocity;
     if (set_relay_map(midi, midi->map[key][channel], 1))
         Send_Bitmask_2_relay(midi);
     return(1);
@@ -472,6 +474,7 @@ startup_banner()
 //
 void usage(int argc, char **argv)
 {
+    (void)argc;
     startup_banner();
 
     printf("usage: %s [-h] [-v(erbose)] [-d][pid file] [-f config_file]  \n", argv[0]);

@@ -273,6 +273,10 @@ int
 YOICS_Printf_Setup(U16 dest_port,U8 *id)
 {
 	int					ret=0;
+#if !defined(LOGGING)
+    (void)dest_port;
+    (void)id;
+#endif
 #if defined(LOGGING)	
 	struct sockaddr_in	client;		/* Information about the client */
 	
@@ -384,7 +388,7 @@ yoics_write_info(U8 *filename, int type, YOICS_STATUS_INFO *info)
 			fprintf(fp,"Not Connected to Yoics (%d). ",info->state);
 		}
 
-		if(info->server_status)	
+		if(info->server_status[0])	
 		{
 			fprintf(fp," %s",info->server_status);
 		}
@@ -392,12 +396,12 @@ yoics_write_info(U8 *filename, int type, YOICS_STATUS_INFO *info)
 
 
 #else
-		if(info->server_status)	
+		if(info->server_status[0])	
 			fprintf(fp,"yoics_server_status = \"%s\";\n",info->server_status);
 		else
 			fprintf(fp,"yoics_server_status =\"\";\n");
 
-		if(info->peer_status)	
+		if(info->peer_status[0])	
 			fprintf(fp,"yoics_peer_status = \"%s\";\n",info->peer_status);
 		else
 			fprintf(fp,"yoics_peer_status =\"\";\n");
@@ -425,5 +429,4 @@ yoics_write_info(U8 *filename, int type, YOICS_STATUS_INFO *info)
 
 	return(0);
 }
-
 

@@ -21,6 +21,8 @@
 - Throttled high-verbosity idle marker output (`.` and `,`) to reduce stdout churn in the event loop. `src/midi.c`
 - Switched serial input from single-byte reads to buffered reads in the event loop. `src/midi.c`
 - Cached UDP target socket address and reused it for `sendto()` calls. `src/midi.c`, `src/midi.h`
+- Added automatic header dependency tracking to automated test builds. `tests/Makefile`
+- Reduced warning noise by fixing unused-parameter and fixed-array string checks. `src/midi.c`, `src/log.c`
 
 ### Added
 - Serial device override via `-s <device>` CLI option. `src/midi.c`, `src/midi.h`
