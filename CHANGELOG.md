@@ -19,6 +19,8 @@
 - Removed unconditional per-iteration `fflush(stdout)` to reduce loop I/O overhead. `src/midi.c`
 - Replaced Linux `second_count()` `ftime` path with `gettimeofday` to reduce deprecated/legacy overhead. `src/arch.c`
 - Throttled high-verbosity idle marker output (`.` and `,`) to reduce stdout churn in the event loop. `src/midi.c`
+- Switched serial input from single-byte reads to buffered reads in the event loop. `src/midi.c`
+- Cached UDP target socket address and reused it for `sendto()` calls. `src/midi.c`, `src/midi.h`
 
 ### Added
 - Serial device override via `-s <device>` CLI option. `src/midi.c`, `src/midi.h`

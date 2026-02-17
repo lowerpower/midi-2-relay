@@ -31,6 +31,17 @@ U8				        global_flag = 0;
 
 int Send_UDP(MIDI *midi, char *buffer, int buffer_size);
 
+#if !defined(UNIT_TEST)
+static void
+init_udp_target(MIDI *midi)
+{
+    memset(&midi->target_addr, 0, sizeof(midi->target_addr));
+    midi->target_addr.sin_family = AF_INET;
+    midi->target_addr.sin_addr.s_addr = midi->target_ip.ip32;
+    midi->target_addr.sin_port = htons((U16)(midi->target_port));
+}
+#endif
+
 //typedef unsigned char U8;
 //typedef unsigned short U16;
 //typedef unsigned int  U32;
@@ -217,17 +228,11 @@ int Bitmask_2_String(MIDI *midi)
 int Send_UDP(MIDI *midi, char *buffer, int buffer_size)
 {
     int ret;
-    struct sockaddr_in  client;
-
-    // udp send the set command
-    client.sin_family = AF_INET;
-    client.sin_addr.s_addr = midi->target_ip.ip32;
-    client.sin_port = htons((U16)(midi->target_port));
 
 
     MIDI_VLOG(midi, 2, "sendto %s target port %d\n", buffer, midi->target_port);
 
-    ret = sendto(midi->soc, buffer, buffer_size, 0, (struct sockaddr *)&client, sizeof(struct sockaddr));
+    ret = sendto(midi->soc, buffer, buffer_size, 0, (struct sockaddr *)&midi->target_addr, sizeof(midi->target_addr));
 	
 	midi->send_timer=second_count();
 
@@ -497,7 +502,8 @@ int main(int argc, char **argv)
     char            *subst;
 	IPADDR			our_ip;
 #if !defined(WIN32)
-    char            buf2[8];
+    unsigned char   midi_buf[64];
+    int             i;
     //struct termios  options;
 #endif
 
@@ -653,6 +659,7 @@ int main(int argc, char **argv)
 
 
     MIDI_VLOG(midi, 1, "verbose level at %d\n", midi->verbose);
+    init_udp_target(midi);
 
     //
     // Load Map File
@@ -729,11 +736,11 @@ int main(int argc, char **argv)
             if(Yoics_Is_Select(midi->sfd))
             {
                 sel=1;
-                count = read(midi->sfd, buf2, 1);
-                if(count)
+                count = read(midi->sfd, midi_buf, sizeof(midi_buf));
+                if(count > 0)
                 {
-                //    printf("count=%d\n",count);
-                    process_midi_byte(midi, buf2[0]);
+                    for (i = 0; i < count; i++)
+                        process_midi_byte(midi, (char)midi_buf[i]);
                 }
                 else
                 {
@@ -743,8 +750,6 @@ int main(int argc, char **argv)
                         fflush(stdout);
                     }
                 }
-                buf2[1] = 0;
-                //printf("count= %d  --> %x\n", count, buf2[0]);
             }
             else
             {

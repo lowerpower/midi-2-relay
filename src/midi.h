@@ -37,6 +37,7 @@ typedef struct midi_config_
     char        target_host[MAX_PATH+1];
     IPADDR      target_ip;
     U16         target_port;
+    struct sockaddr_in target_addr;
     SOCKET		soc;
     U32         send_timer;
     //
