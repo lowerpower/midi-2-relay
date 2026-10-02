@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-02
+### Changed
+- Batch note changes into one relay update. Note on/off now only updates the bitmask; the main loop sends a single `set` after each serial read, after gathering more bytes for up to `-g` ms (default 3). A chord is one `set` instead of one per note, which stops `usb-relay` falling behind under dense MIDI sequences. `src/midi.c`, `src/midi.h`
+
+### Added
+- `-g <ms>` gather window for batching (0 = batch per serial read only, max 50). `src/midi.c`
+
 ## 2026-02-17
 ### Fixed
 - Enabled `-t` parsing to allow setting target host/port. `src/midi.c`

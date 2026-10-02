@@ -34,6 +34,7 @@ Common options:
 - `-t <ip:port>` target relay host/port (see notes below).
 - `-s <device>` serial device path (default `/dev/ttyAMA0`).
 - `-u <port>` UDP listen port (default `0`, disabled).
+- `-g <ms>` gather window: note changes arriving within this many ms are sent as one `set` (default `3`, `0` = one `set` per serial read).
 
 ## Map File
 Default path in code:

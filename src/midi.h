@@ -57,6 +57,10 @@ typedef struct midi_config_
     U16         map[128][16];
     U16         udp_listen_port;
 
+    // batching: relay state changed since last send, and how long (ms) to gather more notes
+    int         dirty;
+    int         gather_ms;
+
     char        config_file[MAX_PATH];
     char        map_file[MAX_PATH];
     struct stat map_file_info;

@@ -19,6 +19,8 @@
 #include "wingetopt.h"
 #else
 #include <termios.h> 
+#include <poll.h>
+#include <sys/time.h>
 #endif
 
 volatile int             go = 0;
@@ -274,15 +276,16 @@ int Send_Bitmask_2_relay(MIDI *midi)
 int process_midi_note_on(MIDI *midi, int key, int channel, int velocity)
 {
     (void)velocity;
+    // Only update the bitmask here; the main loop sends one set per batch.
     if (set_relay_map(midi, midi->map[key][channel], 1))
-        Send_Bitmask_2_relay(midi);
+        midi->dirty = 1;
     return(1);
 }
 
 int process_midi_note_off(MIDI *midi,int key, int channel)
 {
     if (set_relay_map(midi, midi->map[key][channel], 0))
-        Send_Bitmask_2_relay(midi);
+        midi->dirty = 1;
     return(1);
 }
 
@@ -472,6 +475,61 @@ startup_banner()
 //
 // Usage for Software
 //
+//
+// Send one set for all note changes processed since the last flush.
+//
+int flush_relay_batch(MIDI *midi)
+{
+    int ret = 0;
+    if (midi->dirty)
+    {
+        ret = Send_Bitmask_2_relay(midi);
+        midi->dirty = 0;
+    }
+    return(ret);
+}
+
+#if !defined(WIN32)
+static long elapsed_ms(struct timeval *start)
+{
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return (now.tv_sec - start->tv_sec) * 1000L + (now.tv_usec - start->tv_usec) / 1000L;
+}
+
+//
+// After a note change, keep reading serial for up to gather_ms so the rest of a
+// chord lands in the same set. Bounded from the first change, so it adds at most
+// gather_ms of latency.
+//
+void gather_serial(MIDI *midi, unsigned char *buf, int buflen)
+{
+    struct timeval start;
+    struct pollfd pfd;
+    long left;
+    int count, i;
+
+    if (midi->gather_ms <= 0)
+        return;
+
+    gettimeofday(&start, NULL);
+    pfd.fd = midi->sfd;
+    pfd.events = POLLIN;
+
+    while ((left = midi->gather_ms - elapsed_ms(&start)) > 0)
+    {
+        pfd.revents = 0;
+        if (poll(&pfd, 1, (int)left) <= 0)
+            break;
+        count = read(midi->sfd, buf, buflen);
+        if (count <= 0)
+            break;
+        for (i = 0; i < count; i++)
+            process_midi_byte(midi, (char)buf[i]);
+    }
+}
+#endif
+
 void usage(int argc, char **argv)
 {
     (void)argc;
@@ -485,6 +543,7 @@ void usage(int argc, char **argv)
     printf("\t -t target IP:Port (default 127.0.0.1:1027).\n");
     printf("\t -s serial device (default /dev/ttyAMA0).\n");
     printf("\t -u UDP listen port (default 0=disabled).\n");
+    printf("\t -g ms to gather notes into one relay update (default 3, 0=per read).\n");
     exit(2);
 }
 
@@ -523,6 +582,7 @@ int main(int argc, char **argv)
     strncpy(midi->serial_device, "/dev/ttyAMA0", MAX_PATH-1);
     midi->serial_device[MAX_PATH - 1] = 0;
     midi->udp_listen_port=0;
+    midi->gather_ms=3;
     //
     // Banner
     startup_banner();
@@ -564,7 +624,7 @@ int main(int argc, char **argv)
     //
     // Load config file first
     //
-    while ((c = getopt(argc, argv, "f:u:l:d:t:s:vh")) != EOF)
+    while ((c = getopt(argc, argv, "f:u:l:d:t:s:g:vh")) != EOF)
     {
         switch (c)
         {
@@ -575,6 +635,8 @@ int main(int argc, char **argv)
         case 's':
             break;
         case 'u':
+            break;
+        case 'g':
             break;
         case 'd':
             break;
@@ -597,7 +659,7 @@ int main(int argc, char **argv)
     // Load Command Line Args, they overrie config file, reset optarg=1 to rescan
     //
     optind = 1;
-    while ((c = getopt(argc, argv, "f:u:l:d:t:s:vh")) != EOF)
+    while ((c = getopt(argc, argv, "f:u:l:d:t:s:g:vh")) != EOF)
     {
         switch (c)
         {
@@ -637,6 +699,11 @@ int main(int argc, char **argv)
             break;
         case 'u':
             midi->udp_listen_port = (U16)atoi(optarg);
+            break;
+        case 'g':
+            midi->gather_ms = atoi(optarg);
+            if (midi->gather_ms < 0) midi->gather_ms = 0;
+            if (midi->gather_ms > 50) midi->gather_ms = 50;
             break;
         case 'd':
             // Startup as daemon with pid file
@@ -744,6 +811,10 @@ int main(int argc, char **argv)
                 {
                     for (i = 0; i < count; i++)
                         process_midi_byte(midi, (char)midi_buf[i]);
+                    // Batch: gather the rest of a chord, then send one set
+                    if (midi->dirty)
+                        gather_serial(midi, midi_buf, sizeof(midi_buf));
+                    flush_relay_batch(midi);
                 }
                 else
                 {
