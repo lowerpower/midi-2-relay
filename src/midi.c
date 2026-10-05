@@ -24,6 +24,22 @@
 #endif
 
 volatile int             go = 0;
+
+//
+// Millisecond clock for note on-time limits. Never returns 0 (0 means "not timed").
+//
+static U32 now_ms(void)
+{
+    U32 t;
+#if defined(WIN32)
+    t = (U32)GetTickCount();
+#else
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    t = (U32)tv.tv_sec * 1000U + (U32)(tv.tv_usec / 1000);
+#endif
+    return t ? t : 1;
+}
 MIDI                    *global_midi;
 U8				        global_flag = 0;
 
@@ -196,13 +212,15 @@ set_relay_map(MIDI *midi, int bit, int state)
 
     if (state)
     {
-        // Set the bit
+        // Set the bit, and (re)start its on-time
         midi->bitmask[index] |= mask;
+        midi->on_ms[bit] = now_ms();
     }
     else
     {
         // clear the bit
         midi->bitmask[index] &= ~mask;
+        midi->on_ms[bit] = 0;
     }
 
     return(ret);
@@ -476,6 +494,40 @@ startup_banner()
 // Usage for Software
 //
 //
+// Turn off any relay that has been on longer than max_note_ms. It stays off until a
+// note turns it on again. Returns ms until the next relay is due (or -1 if none).
+//
+int expire_relays(MIDI *midi)
+{
+    int bit, next = -1;
+    U32 now, age;
+
+    if (midi->max_note_ms <= 0)
+        return(-1);
+
+    now = now_ms();
+    for (bit = 1; bit <= BITMASK_SIZE * 8; bit++)
+    {
+        if (0 == midi->on_ms[bit])
+            continue;
+        age = now - midi->on_ms[bit];
+        if (age >= (U32)midi->max_note_ms)
+        {
+            set_relay_map(midi, bit, 0);
+            midi->dirty = 1;
+            MIDI_VLOG(midi, 2, "relay %d on for %u ms, max %d ms - turning off\n", bit, age, midi->max_note_ms);
+        }
+        else
+        {
+            int left = midi->max_note_ms - (int)age;
+            if ((next < 0) || (left < next))
+                next = left;
+        }
+    }
+    return(next);
+}
+
+//
 // Send one set for all note changes processed since the last flush.
 //
 int flush_relay_batch(MIDI *midi)
@@ -544,6 +596,7 @@ void usage(int argc, char **argv)
     printf("\t -s serial device (default /dev/ttyAMA0).\n");
     printf("\t -u UDP listen port (default 0=disabled).\n");
     printf("\t -g ms to gather notes into one relay update (default 3, 0=per read).\n");
+    printf("\t -m max ms a note can hold a relay on (default 1000, 0=no limit).\n");
     exit(2);
 }
 
@@ -583,6 +636,7 @@ int main(int argc, char **argv)
     midi->serial_device[MAX_PATH - 1] = 0;
     midi->udp_listen_port=0;
     midi->gather_ms=3;
+    midi->max_note_ms=1000;
     //
     // Banner
     startup_banner();
@@ -624,7 +678,7 @@ int main(int argc, char **argv)
     //
     // Load config file first
     //
-    while ((c = getopt(argc, argv, "f:u:l:d:t:s:g:vh")) != EOF)
+    while ((c = getopt(argc, argv, "f:u:l:d:t:s:g:m:vh")) != EOF)
     {
         switch (c)
         {
@@ -637,6 +691,8 @@ int main(int argc, char **argv)
         case 'u':
             break;
         case 'g':
+            break;
+        case 'm':
             break;
         case 'd':
             break;
@@ -659,7 +715,7 @@ int main(int argc, char **argv)
     // Load Command Line Args, they overrie config file, reset optarg=1 to rescan
     //
     optind = 1;
-    while ((c = getopt(argc, argv, "f:u:l:d:t:s:g:vh")) != EOF)
+    while ((c = getopt(argc, argv, "f:u:l:d:t:s:g:m:vh")) != EOF)
     {
         switch (c)
         {
@@ -704,6 +760,10 @@ int main(int argc, char **argv)
             midi->gather_ms = atoi(optarg);
             if (midi->gather_ms < 0) midi->gather_ms = 0;
             if (midi->gather_ms > 50) midi->gather_ms = 50;
+            break;
+        case 'm':
+            midi->max_note_ms = atoi(optarg);
+            if (midi->max_note_ms < 0) midi->max_note_ms = 0;
             break;
         case 'd':
             // Startup as daemon with pid file
@@ -800,7 +860,14 @@ int main(int argc, char **argv)
         // Read a byte from the serial port
         // read a byte from serial midi interface
         
-        read_count=Yoics_Select(100);
+        // Wake in time to turn off a relay that hits its max on-time
+        {
+            int wait = expire_relays(midi);
+            if ((wait < 0) || (wait > 100))
+                wait = 100;
+            flush_relay_batch(midi);
+            read_count=Yoics_Select(wait > 0 ? wait : 1);
+        }
         if(read_count>0)
         {
             if(Yoics_Is_Select(midi->sfd))
