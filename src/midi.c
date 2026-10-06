@@ -49,6 +49,9 @@ U8				        global_flag = 0;
 #define MIDI_VLOG(midi, level, ...) \
     do { if ((midi)->verbose >= (level)) yprintf(__VA_ARGS__); } while (0)
 
+// After a failed relay send, retry this often (ms) until it goes out
+#define SEND_RETRY_MS 10
+
 int Send_UDP(MIDI *midi, char *buffer, int buffer_size);
 
 #if !defined(UNIT_TEST)
@@ -258,6 +261,11 @@ int Send_UDP(MIDI *midi, char *buffer, int buffer_size)
     MIDI_VLOG(midi, 2, "sendto %s target port %d\n", buffer, midi->target_port);
 
     ret = sendto(midi->soc, buffer, buffer_size, 0, (struct sockaddr *)&midi->target_addr, sizeof(midi->target_addr));
+#if defined(WIN32)
+    midi->send_errno = (ret < 0) ? WSAGetLastError() : 0;
+#else
+    midi->send_errno = (ret < 0) ? errno : 0;
+#endif
 	
 	midi->send_timer=second_count();
 
@@ -284,7 +292,14 @@ int Send_Bitmask_2_relay(MIDI *midi)
 
         ret=Send_UDP(midi, command_buffer, (int)(bit_len + 4));
 
-        strcpy(last_bit_string,midi->bit_string);
+        // Only remember this state once it has actually been sent. If the send
+        // fails (EAGAIN, ENOBUFS, no route...), the caller retries; caching it
+        // here would make the retry look like "no change" and a relay could stay
+        // on (an expiry's off command would be lost).
+        if (ret == (int)(bit_len + 4))
+            strcpy(last_bit_string,midi->bit_string);
+        else
+            ret = -1;
     }
     else
     {
@@ -541,6 +556,21 @@ int flush_relay_batch(MIDI *midi)
     if (midi->dirty)
     {
         ret = Send_Bitmask_2_relay(midi);
+        if (ret < 0)
+        {
+            // Not sent: stay dirty so the main loop retries within SEND_RETRY_MS.
+            // Relays switched on in this batch are not timed until their on state
+            // is actually sent; relays switched off (note-off or max on-time) stay
+            // off in the bitmask and go out with the retry.
+            static U32 last_warn = 0;
+            now = now_ms();
+            if ((0 == last_warn) || ((U32)(now - last_warn) >= 1000))
+            {
+                MIDI_VLOG(midi, 1, "relay send failed (errno %d), retrying\n", midi->send_errno);
+                last_warn = now;
+            }
+            return(ret);
+        }
         midi->dirty = 0;
 
         // Start the on-time of relays turned on in this batch now that the on
@@ -882,7 +912,8 @@ int main(int argc, char **argv)
             int wait = expire_relays(midi);
             if ((wait < 0) || (wait > 100))
                 wait = 100;
-            flush_relay_batch(midi);
+            if ((flush_relay_batch(midi) < 0) && (wait > SEND_RETRY_MS))
+                wait = SEND_RETRY_MS;       // a relay change is still unsent: retry soon
             read_count=Yoics_Select(wait > 0 ? wait : 1);
         }
         if(read_count>0)

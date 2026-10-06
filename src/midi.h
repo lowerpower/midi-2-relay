@@ -40,6 +40,7 @@ typedef struct midi_config_
     struct sockaddr_in target_addr;
     SOCKET		soc;
     U32         send_timer;
+    int         send_errno;     // errno of the last failed relay send (0 = last send ok)
     //
     int         verbose;
     int         log_level;
