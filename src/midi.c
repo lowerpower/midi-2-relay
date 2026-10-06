@@ -26,7 +26,9 @@
 volatile int             go = 0;
 
 //
-// Millisecond clock for note on-time limits. Never returns 0 (0 means "not timed").
+// Monotonic millisecond clock for note on-time limits and the gather window, so
+// wall-clock steps (NTP, manual date changes) cannot shorten or stretch a note.
+// Never returns 0 (0 means "not timed").
 //
 static U32 now_ms(void)
 {
@@ -34,9 +36,9 @@ static U32 now_ms(void)
 #if defined(WIN32)
     t = (U32)GetTickCount();
 #else
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    t = (U32)tv.tv_sec * 1000U + (U32)(tv.tv_usec / 1000);
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    t = (U32)ts.tv_sec * 1000U + (U32)(ts.tv_nsec / 1000000L);
 #endif
     return t ? t : 1;
 }
@@ -212,15 +214,17 @@ set_relay_map(MIDI *midi, int bit, int state)
 
     if (state)
     {
-        // Set the bit, and (re)start its on-time
+        // Set the bit; its on-time starts when the batch is sent (flush_relay_batch)
         midi->bitmask[index] |= mask;
-        midi->on_ms[bit] = now_ms();
+        midi->on_ms[bit] = 0;
+        midi->on_pending[bit] = 1;
     }
     else
     {
         // clear the bit
         midi->bitmask[index] &= ~mask;
         midi->on_ms[bit] = 0;
+        midi->on_pending[bit] = 0;
     }
 
     return(ret);
@@ -532,43 +536,56 @@ int expire_relays(MIDI *midi)
 //
 int flush_relay_batch(MIDI *midi)
 {
-    int ret = 0;
+    int ret = 0, bit;
+    U32 now;
     if (midi->dirty)
     {
         ret = Send_Bitmask_2_relay(midi);
         midi->dirty = 0;
+
+        // Start the on-time of relays turned on in this batch now that the on
+        // state has been sent, so gathering never eats into the max on-time.
+        now = now_ms();
+        for (bit = 1; bit <= BITMASK_SIZE * 8; bit++)
+        {
+            if (midi->on_pending[bit])
+            {
+                midi->on_pending[bit] = 0;
+                midi->on_ms[bit] = now;
+            }
+        }
     }
     return(ret);
 }
 
 #if !defined(WIN32)
-static long elapsed_ms(struct timeval *start)
-{
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    return (now.tv_sec - start->tv_sec) * 1000L + (now.tv_usec - start->tv_usec) / 1000L;
-}
 
 //
 // After a note change, keep reading serial for up to gather_ms so the rest of a
 // chord lands in the same set. Bounded from the first change, so it adds at most
-// gather_ms of latency.
+// gather_ms of latency. Also cut short so a relay already on is not held past
+// its max on-time while we gather.
 //
 void gather_serial(MIDI *midi, unsigned char *buf, int buflen)
 {
-    struct timeval start;
     struct pollfd pfd;
-    long left;
-    int count, i;
+    long left, limit;
+    int count, i, next;
+    U32 start;
 
     if (midi->gather_ms <= 0)
         return;
 
-    gettimeofday(&start, NULL);
+    limit = midi->gather_ms;
+    next = expire_relays(midi);
+    if ((next >= 0) && (next < limit))
+        limit = next;
+
+    start = now_ms();
     pfd.fd = midi->sfd;
     pfd.events = POLLIN;
 
-    while ((left = midi->gather_ms - elapsed_ms(&start)) > 0)
+    while ((left = limit - (long)(now_ms() - start)) > 0)
     {
         pfd.revents = 0;
         if (poll(&pfd, 1, (int)left) <= 0)
@@ -881,6 +898,8 @@ int main(int argc, char **argv)
                     // Batch: gather the rest of a chord, then send one set
                     if (midi->dirty)
                         gather_serial(midi, midi_buf, sizeof(midi_buf));
+                    // catch any relay that hit its max on-time while gathering
+                    expire_relays(midi);
                     flush_relay_batch(midi);
                 }
                 else

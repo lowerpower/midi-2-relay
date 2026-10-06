@@ -62,10 +62,12 @@ typedef struct midi_config_
     int         gather_ms;
 
     // max note on-time: a relay turned on by a note is turned off after this many ms
-    // even if no note-off arrives (0 = no limit). on_ms[] is when each relay went on
-    // (0 = not timed).
+    // even if no note-off arrives (0 = no limit). on_ms[] is when each relay's on
+    // state was sent to the relay controller (0 = not timed); on_pending[] marks
+    // relays turned on in the current batch, not yet sent.
     int         max_note_ms;
     U32         on_ms[BITMASK_SIZE * 8 + 1];
+    U8          on_pending[BITMASK_SIZE * 8 + 1];
 
     char        config_file[MAX_PATH];
     char        map_file[MAX_PATH];
