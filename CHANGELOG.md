@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-05
+### Added
+- Max note on-time, `-m <ms>` (default 1000, 0 = no limit). A relay turned on by a note is turned off after this long even if no note-off arrives, and stays off until a note turns it on again (a repeated note-on restarts the timer). The main loop wakes in time for the next expiry, and relays expiring together go out in one `set`. Also bounds the damage from a lost note-off. `src/midi.c`, `src/midi.h`
+- The on-time starts when the relay's on state is sent, not when the note is parsed, so the gather window never eats into it; gathering is cut short at the next relay deadline and expiries are rechecked after it; note timing uses a monotonic clock. `src/midi.c`, `src/midi.h`
+
 ## 2026-10-02
 ### Changed
 - Batch note changes into one relay update. Note on/off now only updates the bitmask; the main loop sends a single `set` after each serial read, after gathering more bytes for up to `-g` ms (default 3). A chord is one `set` instead of one per note, which stops `usb-relay` falling behind under dense MIDI sequences. `src/midi.c`, `src/midi.h`

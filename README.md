@@ -40,6 +40,7 @@ Common options:
 - `-s <device>` serial device path (default `/dev/ttyAMA0`).
 - `-u <port>` UDP listen port (default `0`, disabled).
 - `-g <ms>` gather window: note changes arriving within this many ms are sent as one `set` (default `3`, `0` = one `set` per serial read).
+- `-m <ms>` max note on-time: a relay turned on by a note is turned off after this many ms even without a note-off (default `1000`, `0` = no limit).
 
 ## Map File
 Default path in code:
