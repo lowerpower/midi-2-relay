@@ -3,6 +3,7 @@
 ## 2026-10-06
 ### Fixed
 - A relay change whose UDP send fails is now retried instead of forgotten. Before, a failed `sendto()` (for example `EAGAIN`/`ENOBUFS`) still cleared the pending batch and cached the state as sent, so the off command from the max on-time limit (or a note-off) could be lost and the relay stay on. The state is cached only after a complete send; on failure the batch stays pending, the main loop retries every 10 ms, newly-on relays are not timed until their on state is actually sent, and the failure is logged at most once a second (verbose 1). Regression test with real loopback sockets. `src/midi.c`, `src/midi.h`, `tests/test_basic.c`
+- All relays are switched off when midi2relay starts. A restarted midi2relay does not know what state the relays were left in and can only apply the max on-time to relays it switched on itself. `reset_relay()` (previously unused) now also clears the max on-time tracking and sends through the normal batch path, so a failed send is retried. `src/midi.c`, `tests/test_basic.c`
 
 ## 2026-10-05
 ### Added

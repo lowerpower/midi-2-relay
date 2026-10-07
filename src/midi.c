@@ -53,6 +53,7 @@ U8				        global_flag = 0;
 #define SEND_RETRY_MS 10
 
 int Send_UDP(MIDI *midi, char *buffer, int buffer_size);
+int flush_relay_batch(MIDI *midi);
 
 #if !defined(UNIT_TEST)
 static void
@@ -175,12 +176,20 @@ init_serial(MIDI *midi)
 }
 
 
+//
+// All relays off: clear the bitmask and the max on-time tracking, and send it
+// through the normal path, so a failed send is retried by the main loop like any
+// other relay change.
+//
 void
 reset_relay(MIDI *midi)
 {
     memset(midi->bitmask,0,BITMASK_SIZE);
-    Send_UDP(midi, "set 0", strlen("set 0"));
-
+    memset(midi->on_ms,0,sizeof(midi->on_ms));
+    memset(midi->on_pending,0,sizeof(midi->on_pending));
+    MIDI_VLOG(midi, 1, "all relays off\n");
+    midi->dirty = 1;
+    flush_relay_batch(midi);
 }
 
 int
@@ -894,6 +903,10 @@ int main(int argc, char **argv)
     }
 #endif
 
+
+    // Start with every relay off. A restarted midi2relay doesn't know what state
+    // the relays were left in, and can only time relays it switched on itself.
+    reset_relay(midi);
 
     // initialize send timer
     midi->send_timer=second_count();

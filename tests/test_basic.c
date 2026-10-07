@@ -9,6 +9,7 @@ int support_midi_byte_type(MIDI *midi, char type);
 void process_midi_byte(MIDI *midi, char byte);
 int flush_relay_batch(MIDI *midi);
 int expire_relays(MIDI *midi);
+void reset_relay(MIDI *midi);
 
 #if !defined(WIN32)
 #include <sys/socket.h>
@@ -90,6 +91,53 @@ static void test_failed_send_is_retried(void)
     close(rx);
     close(tx);
 }
+
+// Startup reset: every relay off and untimed, sent through the normal path, and
+// retried if the send fails.
+static void test_reset_relay_turns_all_off(void)
+{
+    MIDI midi;
+    char buf[256];
+    struct sockaddr_in rx_addr;
+    socklen_t alen = sizeof(rx_addr);
+    int rx, tx, i, nonzero = 0;
+
+    memset(&midi, 0, sizeof(midi));
+    rx = socket(AF_INET, SOCK_DGRAM, 0);
+    tx = socket(AF_INET, SOCK_DGRAM, 0);
+    memset(&rx_addr, 0, sizeof(rx_addr));
+    rx_addr.sin_family = AF_INET;
+    rx_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    TEST_ASSERT_INT_EQ(0, bind(rx, (struct sockaddr *)&rx_addr, sizeof(rx_addr)));
+    TEST_ASSERT_INT_EQ(0, getsockname(rx, (struct sockaddr *)&rx_addr, &alen));
+    midi.target_addr = rx_addr;
+    midi.soc = tx;
+
+    // two relays on and sent
+    set_relay_map(&midi, 3, 1); set_relay_map(&midi, 9, 1); midi.dirty = 1;
+    TEST_ASSERT_TRUE(flush_relay_batch(&midi) > 0);
+    TEST_ASSERT_TRUE(recv_set(rx, buf, sizeof(buf)) > 0);
+
+    // reset with a failing socket: state cleared, still owed a send
+    midi.soc = -1;
+    reset_relay(&midi);
+    for (i = 0; i < BITMASK_SIZE; i++) nonzero |= midi.bitmask[i];
+    TEST_ASSERT_INT_EQ(0, nonzero);
+    TEST_ASSERT_INT_EQ(0, (int)midi.on_ms[3]);
+    TEST_ASSERT_INT_EQ(0, (int)midi.on_ms[9]);
+    TEST_ASSERT_INT_EQ(1, midi.dirty);
+    TEST_ASSERT_INT_EQ(-1, recv_set(rx, buf, sizeof(buf)));
+
+    // the retry sends all off
+    midi.soc = tx;
+    TEST_ASSERT_TRUE(flush_relay_batch(&midi) > 0);
+    TEST_ASSERT_INT_EQ(0, midi.dirty);
+    TEST_ASSERT_TRUE(recv_set(rx, buf, sizeof(buf)) > 0);
+    TEST_ASSERT_STR_EQ("set 0000000000000000000000000000000000000000000000000000000000000000", buf);
+
+    close(rx);
+    close(tx);
+}
 #endif
 
 static void test_set_relay_map_bounds(void)
@@ -152,5 +200,6 @@ void run_test_basic(void)
     test_process_midi_byte_state_machine();
 #if !defined(WIN32)
     test_failed_send_is_retried();
+    test_reset_relay_turns_all_off();
 #endif
 }
