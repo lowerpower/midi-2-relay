@@ -2,7 +2,7 @@
 
 ![Language](https://img.shields.io/badge/language-C-blue)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey)
-![License](https://img.shields.io/badge/license-Unknown-inactive)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
 Translate MIDI note events into UDP relay commands.
 
@@ -99,3 +99,6 @@ Windows:
   - The file is only reloaded when mtime changes and checked ~every 60s.
 - UDP send appears silent:
   - There is no inbound UDP handling; only outbound `set` and `ping` are used.
+
+## License
+MIT. See [LICENSE](LICENSE).
